@@ -1,0 +1,158 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://ds4mate.app/schemas/mapping-profile.schema.json",
+  "title": "DS4Mate MappingProfile",
+  "description": "机器可读契约：DS4Mate 一个完整映射配置文件的 JSON Schema。本 Schema 是前后端/编辑器与运行时共同引用的唯一真相源。任何字段变更必须先改 Schema 再改代码。",
+  "type": "object",
+  "required": ["id", "name", "symbol", "stickSensitivity", "scrollSensitivity", "mappings", "version"],
+  "additionalProperties": false,
+  "properties": {
+    "id": {
+      "type": "string",
+      "format": "uuid",
+      "description": "Profile 的唯一 UUID，文件名 = profile.id + .json"
+    },
+    "name": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 64,
+      "description": "在菜单栏显示的人类可读名字"
+    },
+    "symbol": {
+      "type": "string",
+      "pattern": "^[a-z0-9_.]+$",
+      "description": "SF Symbol 名字，必须在本项目符号表中存在"
+    },
+    "stickSensitivity": {
+      "type": "number",
+      "minimum": 0.1,
+      "maximum": 5.0,
+      "default": 1.0,
+      "description": "摇杆→鼠标速度倍率"
+    },
+    "scrollSensitivity": {
+      "type": "number",
+      "minimum": 0.1,
+      "maximum": 5.0,
+      "default": 1.0,
+      "description": "摇杆→滚轮速度倍率"
+    },
+    "mappings": {
+      "type": "array",
+      "minItems": 0,
+      "maxItems": 64,
+      "items": { "$ref": "#/definitions/ButtonMapping" }
+    },
+    "createdAt": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "updatedAt": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "version": {
+      "type": "integer",
+      "minimum": 1,
+      "default": 1,
+      "description": "Profile schema 版本；升级兼容性用"
+    }
+  },
+  "definitions": {
+    "ButtonMapping": {
+      "type": "object",
+      "required": ["id", "button", "action"],
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "button": {
+          "type": "string",
+          "enum": [
+            "dpadUp", "dpadDown", "dpadLeft", "dpadRight",
+            "buttonA", "buttonB", "buttonX", "buttonY",
+            "leftShoulder", "rightShoulder",
+            "leftTrigger", "rightTrigger",
+            "leftThumbstickUp", "leftThumbstickDown", "leftThumbstickLeft", "leftThumbstickRight",
+            "rightThumbstickUp", "rightThumbstickDown", "rightThumbstickLeft", "rightThumbstickRight",
+            "leftThumbstickButton", "rightThumbstickButton",
+            "touchpadButton",
+            "share", "options", "ps",
+            "leftStick2D", "rightStick2D", "touchpadPrimary2D",
+            "leftTriggerAnalog", "rightTriggerAnalog"
+          ],
+          "description": "目标 PS4 手柄按键名（与 ControllerButton 枚举一一对应）"
+        },
+        "action": {
+          "$ref": "#/definitions/Action"
+        },
+        "triggerThreshold": {
+          "type": ["number", "null"],
+          "minimum": 0.0,
+          "maximum": 1.0,
+          "description": "仅对扳机类按键有意义；按下达到该比例才触发"
+        },
+        "repeatWhileHeld": {
+          "type": "boolean",
+          "default": false,
+          "description": "持续按下时是否重发 action（慎用，多数情况下 false）"
+        }
+      }
+    },
+    "Action": {
+      "type": "object",
+      "required": ["kind"],
+      "properties": {
+        "kind": {
+          "type": "string",
+          "enum": [
+            "mouseLeftClick",
+            "mouseRightClick",
+            "mouseMiddleClick",
+            "mouseDoubleClick",
+            "mouseMove",
+            "scroll",
+            "key",
+            "hotkey",
+            "shell"
+          ]
+        },
+        "keyCode": { "type": "integer", "minimum": 0, "maximum": 127 },
+        "modifiers": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 15,
+          "description": "位掩码：1=Command 2=Option 4=Shift 8=Control"
+        },
+        "dx": { "type": "number", "description": "鼠标 X 偏移或滚动 X" },
+        "dy": { "type": "number", "description": "鼠标 Y 偏移或滚动 Y" },
+        "smoothing": { "type": "number", "minimum": 0.0, "maximum": 1.0, "default": 0.5 },
+        "shellCommand": { "type": "string", "minLength": 0, "maxLength": 512 }
+      },
+      "allOf": [
+        {
+          "if": { "properties": { "kind": { "const": "key" } } },
+          "required": ["keyCode"]
+        },
+        {
+          "if": { "properties": { "kind": { "const": "hotkey" } } },
+          "required": ["keyCode"]
+        },
+        {
+          "if": { "properties": { "kind": { "const": "mouseMove" } } },
+          "required": ["dx", "dy"]
+        },
+        {
+          "if": { "properties": { "kind": { "const": "scroll" } } },
+          "required": ["dx", "dy"]
+        },
+        {
+          "if": { "properties": { "kind": { "const": "shell" } } },
+          "required": ["shellCommand"]
+        }
+      ]
+    }
+  }
+}

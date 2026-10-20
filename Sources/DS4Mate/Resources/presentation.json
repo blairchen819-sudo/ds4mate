@@ -1,0 +1,41 @@
+{
+  "id": "B0B0B0B0-0000-0000-0000-000000000003",
+  "name": "演示",
+  "version": 1,
+  "isBuiltin": true,
+  "bindings": [
+    { "input": "leftStickX", "action": { "type": "none" } },
+    { "input": "leftStickY", "action": { "type": "none" } },
+    { "input": "rightStickX", "action": { "type": "mouseMoveCursor" } },
+    { "input": "rightStickY", "action": { "type": "mouseMoveCursor" } },
+    { "input": "leftTriggerAxis", "action": { "type": "keyPress", "keyCode": 115, "modifiers": 0 } },
+    { "input": "rightTriggerAxis", "action": { "type": "keyPress", "keyCode": 119, "modifiers": 0 } },
+    { "input": "cross", "action": { "type": "keyPress", "keyCode": 124, "modifiers": 0 } },
+    { "input": "circle", "action": { "type": "keyPress", "keyCode": 53, "modifiers": 0 } },
+    { "input": "square", "action": { "type": "keyPress", "keyCode": 51, "modifiers": 1048576 } },
+    { "input": "triangle", "action": { "type": "keyPress", "keyCode": 48, "modifiers": 1048576 } },
+    { "input": "l1", "action": { "type": "keyPress", "keyCode": 115, "modifiers": 0 } },
+    { "input": "r1", "action": { "type": "keyPress", "keyCode": 119, "modifiers": 0 } },
+    { "input": "l3", "action": { "type": "none" } },
+    { "input": "r3", "action": { "type": "none" } },
+    { "input": "dpadUp", "action": { "type": "none" } },
+    { "input": "dpadDown", "action": { "type": "none" } },
+    { "input": "dpadLeft", "action": { "type": "none" } },
+    { "input": "dpadRight", "action": { "type": "none" } },
+    { "input": "ps", "action": { "type": "none" } },
+    { "input": "share", "action": { "type": "none" } },
+    { "input": "touchpadButton", "action": { "type": "none" } },
+    { "input": "options", "action": { "type": "exitApp" } }
+  ],
+  "parameters": {
+    "deadzone": 0.05,
+    "cursorSensitivity": 1.0,
+    "scrollSensitivity": 1.0,
+    "fineScrollSensitivity": 0.3,
+    "invertLeftStickX": false,
+    "invertLeftStickY": false,
+    "invertRightStickX": false,
+    "invertRightStickY": false,
+    "buttonSwapXY": false
+  }
+}

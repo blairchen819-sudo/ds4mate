@@ -1,0 +1,41 @@
+{
+  "id": "B0B0B0B0-0000-0000-0000-000000000002",
+  "name": "媒体遥控",
+  "version": 1,
+  "isBuiltin": true,
+  "bindings": [
+    { "input": "leftStickX", "action": { "type": "none" } },
+    { "input": "leftStickY", "action": { "type": "none" } },
+    { "input": "rightStickX", "action": { "type": "mediaKey", "mediaAction": "volumeDown" } },
+    { "input": "rightStickY", "action": { "type": "mediaKey", "mediaAction": "volumeUp" } },
+    { "input": "leftTriggerAxis", "action": { "type": "mediaKey", "mediaAction": "volumeDown" } },
+    { "input": "rightTriggerAxis", "action": { "type": "mediaKey", "mediaAction": "volumeUp" } },
+    { "input": "cross", "action": { "type": "mediaKey", "mediaAction": "playPause" } },
+    { "input": "circle", "action": { "type": "none" } },
+    { "input": "square", "action": { "type": "mediaKey", "mediaAction": "previous" } },
+    { "input": "triangle", "action": { "type": "mediaKey", "mediaAction": "next" } },
+    { "input": "l1", "action": { "type": "mediaKey", "mediaAction": "previous" } },
+    { "input": "r1", "action": { "type": "mediaKey", "mediaAction": "next" } },
+    { "input": "l3", "action": { "type": "none" } },
+    { "input": "r3", "action": { "type": "none" } },
+    { "input": "dpadUp", "action": { "type": "none" } },
+    { "input": "dpadDown", "action": { "type": "none" } },
+    { "input": "dpadLeft", "action": { "type": "mediaKey", "mediaAction": "previous" } },
+    { "input": "dpadRight", "action": { "type": "mediaKey", "mediaAction": "next" } },
+    { "input": "ps", "action": { "type": "none" } },
+    { "input": "share", "action": { "type": "none" } },
+    { "input": "touchpadButton", "action": { "type": "mediaKey", "mediaAction": "mute" } },
+    { "input": "options", "action": { "type": "exitApp" } }
+  ],
+  "parameters": {
+    "deadzone": 0.05,
+    "cursorSensitivity": 1.0,
+    "scrollSensitivity": 1.0,
+    "fineScrollSensitivity": 0.3,
+    "invertLeftStickX": false,
+    "invertLeftStickY": false,
+    "invertRightStickX": false,
+    "invertRightStickY": false,
+    "buttonSwapXY": false
+  }
+}

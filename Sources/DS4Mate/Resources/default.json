@@ -1,0 +1,41 @@
+{
+  "id": "B0B0B0B0-0000-0000-0000-000000000001",
+  "name": "默认",
+  "version": 1,
+  "isBuiltin": true,
+  "bindings": [
+    { "input": "leftStickX", "action": { "type": "scroll" } },
+    { "input": "leftStickY", "action": { "type": "scroll" } },
+    { "input": "rightStickX", "action": { "type": "mouseMoveCursor" } },
+    { "input": "rightStickY", "action": { "type": "mouseMoveCursor" } },
+    { "input": "leftTriggerAxis", "action": { "type": "fineScroll" } },
+    { "input": "rightTriggerAxis", "action": { "type": "fineScroll" } },
+    { "input": "cross", "action": { "type": "mouseLeftClick" } },
+    { "input": "circle", "action": { "type": "mouseRightClick" } },
+    { "input": "square", "action": { "type": "mouseMiddleClick" } },
+    { "input": "triangle", "action": { "type": "mouseDoubleClick" } },
+    { "input": "l1", "action": { "type": "systemShortcut", "systemShortcut": "browserBack" } },
+    { "input": "r1", "action": { "type": "systemShortcut", "systemShortcut": "browserForward" } },
+    { "input": "l3", "action": { "type": "mouseDragToggle" } },
+    { "input": "r3", "action": { "type": "systemShortcut", "systemShortcut": "launchpad" } },
+    { "input": "dpadUp", "action": { "type": "systemShortcut", "systemShortcut": "missionControl" } },
+    { "input": "dpadDown", "action": { "type": "systemShortcut", "systemShortcut": "appExpose" } },
+    { "input": "dpadLeft", "action": { "type": "systemShortcut", "systemShortcut": "browserBack" } },
+    { "input": "dpadRight", "action": { "type": "systemShortcut", "systemShortcut": "browserForward" } },
+    { "input": "ps", "action": { "type": "none" } },
+    { "input": "share", "action": { "type": "systemShortcut", "systemShortcut": "screenshotSelection" } },
+    { "input": "touchpadButton", "action": { "type": "systemShortcut", "systemShortcut": "missionControl" } },
+    { "input": "options", "action": { "type": "exitApp" } }
+  ],
+  "parameters": {
+    "deadzone": 0.05,
+    "cursorSensitivity": 1.0,
+    "scrollSensitivity": 1.0,
+    "fineScrollSensitivity": 0.3,
+    "invertLeftStickX": false,
+    "invertLeftStickY": false,
+    "invertRightStickX": false,
+    "invertRightStickY": false,
+    "buttonSwapXY": false
+  }
+}

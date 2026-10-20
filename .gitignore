@@ -1,0 +1,19 @@
+# 构建产物
+build/
+.build/
+*.xcodeproj
+DerivedData/
+
+# 本地工具数据
+.workbuddy/
+.DS_Store
+
+# 签名材料（绝不入库）
+*.p12
+*.pem
+*.cer
+*.key
+
+# 编辑器
+.vscode/
+.idea/
