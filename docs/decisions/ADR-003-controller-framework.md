@@ -1,7 +1,7 @@
 # ADR-003: 使用 GameController.framework + GCDualShockGamepad 接入 PS4 DualShock 4
 
 ## Status
-Accepted · 2026-10-18
+Superseded · 2026-10-20（被 ADR-008 替代；最终实现改用 IOHIDManager）
 
 ## Background
 PS4 DualShock 4 通过蓝牙/USB 与 Mac 通讯。Apple 在 macOS 11+ 起内置对 DualShock 4 的 profile，名为 `GCDualShockGamepad`，继承自 `GCExtendedGamepad`。

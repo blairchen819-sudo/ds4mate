@@ -90,7 +90,7 @@ struct SettingsView: View {
             Divider()
             Text("MIT License")
                 .font(.caption)
-            Link("查看源码", destination: URL(string: "https://github.com/ericmr/ds4mate")!)
+            Link("查看源码", destination: URL(string: "https://github.com/ericmr1981/ds4mate")!)
                 .font(.caption)
         }
         .padding()

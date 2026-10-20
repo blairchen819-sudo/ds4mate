@@ -7,6 +7,7 @@
 > - **PS4 接入**：文档写的是 `GameController.framework`（ADR-003 / `architecture.md` §3.1），实际代码改用 `IOHIDManager`（见 `Sources/DS4Mate/Services/HIDControllerService.swift`），原因是 macOS 26 上 GameController 的 PS4 事件流有 bug。
 > - **工程形态**：`architecture.md` §K6 写「Xcode project（非 Swift Package）」，实际仓库用 SwiftPM（`Package.swift`）。
 > - **千问语音控制 / 桌面切换**：这两项实际已实现（见 `QwenVoiceController.swift` / `SpaceSwitcher.swift`），但规划文档未覆盖。
+> - **收敛记录（2026-10-20）**：上述分歧已通过新增 ADR-008（控制器框架改为 IOHIDManager）、ADR-009（工程结构改为 SwiftPM）并补录 PRD §4.5（附加功能）得到修正；ADR-003 与 ADR-006 标记为 Superseded。
 
 ## 文档导航
 
@@ -17,7 +18,7 @@
 | `DESIGN.md` | UI/UX 设计（待评审） |
 | `OPEN-DECISIONS.md` | 开放决策日志（5 项已全部 RESOLVED） |
 | `adr-index.md` | ADR 总索引 |
-| `decisions/` | 7 份 ADR（ADR-001 ~ ADR-007）+ 映射 Profile 的 JSON Schema |
+| `decisions/` | 9 份 ADR（ADR-001 ~ ADR-009）+ 映射 Profile 的 JSON Schema |（ADR-003 / ADR-006 已标记 Superseded，分别被 ADR-008 / ADR-009 替代）|
 | `design-system/` | 设计系统：`MASTER.md` + 6 个页面范式（menu / editor / settings / onboarding / profiles / action-picker） |
 | `design-tokens.json` | W3C 标准设计 Token |
 | `research/PRD-v0.1.md` | 产品需求文档（背景、竞品、目标用户、MVP 范围） |

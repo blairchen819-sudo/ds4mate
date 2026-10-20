@@ -62,13 +62,13 @@
 | 进程入口 | `@main App` + `MenuBarExtra` Scene | macOS 13+ | 架构 §4.1 |
 | 菜单栏 | `MenuBarExtra(.window)` | macOS 13+ | 架构 §4.2；`.window` 风格承载可视化编辑器 |
 | Dock 隐藏 | `Info.plist: LSUIElement = true` | — | 架构 §3.2 双重保险 |
-| PS4 接入 | `GameController.framework` → `GCDualShockGamepad` | macOS 11+ | 架构 §3.1 零代码接入 |
+| PS4 接入 | `IOHIDManager` 直接读 HID 报告（绕过 macOS 26 的 GameController.framework 缺陷） | macOS 全版本 | 架构 §3.1 / ADR-008 |
 | 事件合成 | `CoreGraphics.CGEvent.post(tap: .cgSessionEventTap)` | macOS 全版本 | 架构 §3.3 系统级输入唯一稳态 |
 | 权限检测 | `AXIsProcessTrustedWithOptions([kAXTrustedCheckOptionPrompt: true])` | macOS 全版本 | 架构 §3.4 |
 | 配置持久化（偏好） | `@AppStorage`（UserDefaults 包装） | — | 架构 §4.5 |
 | 配置持久化（Profile） | `Codable` + `JSONEncoder/Decoder` → `~/Library/Application Support/DS4Mate/profiles/{name}.json` | — | 架构 §4.5 |
 | Schema 契约 | `mapping-profile.schema.json`（JSON Schema Draft 2020-12） | — | 见 §5 |
-| 工程结构 | Xcode project（双 target：App + Tests） | Xcode 15+ | 架构 §4.6 |
+| 工程结构 | Swift Package（Package.swift，单一 executable target） | Swift 5.9+ | 架构 §4.6 / ADR-009 |
 | 图标库 | **SF Symbols 5**（`gamecontroller.fill` 等） | macOS 13+ 资源 | 设计 §A + 架构 ADR |
 | 测试 | XCTest 单元 + ViewInspector 视图 | — | 架构 ADR-007 |
 | 打包 | `xcodebuild` + `xcrun productbuild` 输出 `.pkg`；通过 Homebrew Cask + GitHub Release 分发 | — | 架构 §11 |
@@ -374,7 +374,7 @@ struct AppRuntimeState: Codable {
 
 ```bash
 # 1. 拉取源码
-git clone https://github.com/ericmr/ds4mate.git
+git clone https://github.com/ericmr1981/ds4mate.git
 cd ds4mate
 
 # 2. 用 Xcode 15 打开

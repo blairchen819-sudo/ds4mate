@@ -103,9 +103,9 @@ ds4mate/
 
 ```
 [PS4 手柄]
-  ↓ 蓝牙
-[GameController.framework]
-  ↓ GCExtendedGamepad 回调
+  ↓ 蓝牙 (HID)
+[IOHIDManager]  ← 直接读 HID 报告（绕过 macOS 26 的 GameController.framework 缺陷）
+  ↓ HID 报告解析
 [ControllerService] ← 持有 [Profile] (active)
   ↓ 查 binding(for: input)
 [EventSynthesizer]

@@ -6,11 +6,13 @@ DS4Mate 的所有架构级别决策（Architecture Decision Records），遵循 
 |-----|------|------|
 | [ADR-001](decisions/ADR-001-tech-stack.md) | Swift + SwiftUI 作为主技术栈 | Accepted · 2026-10-18 |
 | [ADR-002](decisions/ADR-002-menubar-pattern.md) | MenuBarExtra(.window) + LSUIElement 实现菜单栏 App | Accepted · 2026-10-18 |
-| [ADR-003](decisions/ADR-003-controller-framework.md) | 使用 GameController.framework + GCDualShockGamepad 接入 PS4 | Accepted · 2026-10-18 |
+| [ADR-003](decisions/ADR-003-controller-framework.md) | 使用 GameController.framework + GCDualShockGamepad 接入 PS4 | **Superseded · 2026-10-20**（被 ADR-008 替代） |
 | [ADR-004](decisions/ADR-004-event-synthesis.md) | 通过 CGEvent 合成鼠标/键盘事件 | Accepted · 2026-10-18 |
 | [ADR-005](decisions/ADR-005-persistence.md) | Codable JSON + Application Support 目录持久化 Profile | Accepted · 2026-10-18 |
-| [ADR-006](decisions/ADR-006-project-structure.md) | Xcode Project（非 Swift Package）作为工程结构 | Accepted · 2026-10-18 |
+| [ADR-006](decisions/ADR-006-project-structure.md) | Xcode Project（非 Swift Package）作为工程结构 | **Superseded · 2026-10-20**（被 ADR-009 替代） |
 | [ADR-007](decisions/ADR-007-testing.md) | XCTest + ViewInspector 作为测试基线 | Accepted · 2026-10-18 |
+| [ADR-008](decisions/ADR-008-controller-hid-manager.md) | 改用 IOHIDManager 直接读 HID 报告接入 PS4 | Accepted · 2026-10-20 |
+| [ADR-009](decisions/ADR-009-project-structure.md) | 采用 Swift Package（Package.swift）作为工程结构 | Accepted · 2026-10-20 |
 
 ## 机器可读契约
 

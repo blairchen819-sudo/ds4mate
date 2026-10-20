@@ -1,7 +1,7 @@
 # ADR-006: Xcode Project（非 Swift Package）作为工程结构
 
 ## Status
-Accepted · 2026-10-18
+Superseded · 2026-10-20（被 ADR-009 替代；最终实现采用 SwiftPM）
 
 ## Background
 DS4Mate 是一个 macOS 菜单栏 App，涉及 Info.plist、Entitlements、Assets.xcassets、Settings Scene、MenuBarExtra Scene、Test Target 等多种 Xcode 原生特性。三种工程形态：

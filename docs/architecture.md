@@ -43,10 +43,10 @@
 |---|------|------|------------|
 | K1 | 进程入口 | SwiftUI `@main App` + 单 `MenuBarExtra` Scene | macOS 13+ 标准做法，少量桥接 AppKit |
 | K2 | 菜单栏实现 | **`MenuBarExtra(.window 风格)`** + `LSUIElement=true` | Apple 官方推荐；`.window` 风格承载可视化编辑器 |
-| K3 | PS4 接入层 | **GameController.framework**，`GCDualShockGamepad` | macOS 11+ 原生识别，蓝牙即插即用 |
+| K3 | PS4 接入层 | **IOHIDManager 直接读 HID 报告**（绕过 macOS 26 的 GameController.framework 缺陷） | 连接稳定，不依赖系统对 `GCDualShockGamepad` 的支持 | 见 ADR-008 |
 | K4 | 事件合成 | **CoreGraphics CGEvent**（`post(tap: .cgSessionEventTap)`） | 系统级输入唯一稳态路径，Quartz Event Services 是同一 API 另一入口 |
 | K5 | 持久化 | **Codable JSON** 文件，存放于 `Application Support/DS4Mate/profiles/*.json` | Profile 是普通对象图，不需要查询、不需要 SwiftData 复杂度 |
-| K6 | 工程结构 | **Xcode project**（非 Swift Package） | 菜单栏 App + 多 Scene + Info.plist + 权限描述，SPM 收益低、配置烦 |
+| K6 | 工程结构 | **Swift Package（Package.swift，单一 executable target）** | 无需 Xcode，统一 swift 工具链；打包/签名由 scripts/build.sh 完成 | 见 ADR-009 |
 | K7 | 测试框架 | **XCTest 单元测试 + ViewInspector SwiftUI 视图测试** | 都是 Apple 一线选择；不引入第三方 E2E |
 
 详见 §4 选型矩阵 + 附录 C 的 7 份 ADR。
@@ -58,6 +58,8 @@
 > 调研方法：直接读 Apple Developer Documentation（developer.apple.com）、Quinn "The Eskimo" DTS 在 Apple Developer Forums 的官方答疑、以及开源实现 ps5-dualsense-mac-trackpad（pygame + CoreGraphics）作行为对照。
 
 ### 3.1 Q1 — PS4 DualShock 4 在 macOS 上被原生识别吗？
+
+> ⚠️ **规划与实现不一致**：本节为规划期调研结论，描述的是 `GameController.framework` 路线。最终实现因 macOS 26 的 GameController.framework 缺陷改用 `IOHIDManager` 直接读取 HID 报告（见 [ADR-008](decisions/ADR-008-controller-hid-manager.md)）。本节保留作调研记录。
 
 **结论：是的，零代码接入。** macOS 11+ 内置 `GCDualShockGamepad`（继承自 `GCExtendedGamepad`）。只要手柄通过蓝牙或 USB 与 Mac 配对，`GCController.controllers` 列表里就会出现，`controller.extendedGamepad as? GCDualShockGamepad` 即可拿到 DS4 专属 touchpad 数据。
 
@@ -159,13 +161,15 @@
 
 ### 4.3 PS4 接入
 
+> ⚠️ 最终实现未采用 `GameController.framework`，改为 `IOHIDManager` 直接读 HID 报告（见 [ADR-008](decisions/ADR-008-controller-hid-manager.md)）。
+
 | 选项 | 平台识别 | 性能 | 代码量 | 评分 | 决定 |
 |------|---------|------|--------|------|------|
-| **A. `GameController.framework` → `GCDualShockGamepad`** | macOS 11+ 原生 | 蓝牙延迟低 | ≤ 100 行 | ★★★★★ | ✅ 选定 |
-| B. `IOHIDManager` 直接读 HID 报告 | 全平台 | 高 | ≥ 500 行 | ★★ | — |
+| **A. `GameController.framework` → `GCDualShockGamepad`** | macOS 11+ 原生 | 蓝牙延迟低 | ≤ 100 行 | ★★★★★ | —（规划，被 ADR-008 替代） |
+| B. `IOHIDManager` 直接读 HID 报告 | 全平台 | 高 | ≥ 500 行 | ★★ | ✅ 实际采用（见 ADR-008） |
 | C. 私有 DualShock4PID / DualSense4PID 枚举 | 反向工程 | 高 | ≥ 1000 行 | ★ | — |
 
-**选定 A**：见 §3.1。开源参考实现的 `pygame` 路线是因为无 Swift 绑定，不代表 macOS 推荐做法。
+> **注**：规划期选定 A，但因 macOS 26 的 GameController.framework 缺陷，最终实现改为 B（IOHIDManager），见 [ADR-008](decisions/ADR-008-controller-hid-manager.md)。
 
 ### 4.4 事件合成
 
@@ -194,11 +198,11 @@
 
 | 选项 | 单文件 ≤ 300 行约束 | 维护成本 | 评分 | 决定 |
 |------|-------------------|---------|------|------|
-| **A. Xcode project（.xcodeproj）+ 单一 target** | 容易约束 | 低 | ★★★★★ | ✅ 选定 |
-| B. Swift Package 单模块 | Package.swift 限制多 Scene 表达 | 中 | ★★★ | — |
+| **A. Swift Package（Package.swift）+ 单一 executable target** | 容易约束 | 低 | ★★★★★ | ✅ 选定 |
+| B. Xcode project（.xcodeproj） | 需管理 pbxproj | 中 | ★★★ | — |
 | C. Tuist / XcodeGen 工程生成 | 灵活 | 高 | ★★★ | — |
 
-**选定 A**：菜单栏 App 至少要有：`DS4Mate.app` target、`DS4MateTests` test target、`Info.plist`、资源 Catalog。两个 SPM 收益不大，还会被 App Store 验证烦到。后续若要扩展（macOS 插件、共享库）再切 C。
+**选定 A**：仓库实际以 SwiftPM 组织，`Package.swift` 定义 executable target `DS4Mate`；菜单栏 App 经 `swiftc` 编译后由 `scripts/build.sh` 手搓 `.app` bundle 并签名，无需 Xcode 工程文件（见 [ADR-009](decisions/ADR-009-project-structure.md)）。
 
 ### 4.7 测试框架
 
@@ -404,6 +408,8 @@ public final class CodableJSONProfileStore: ProfileStore { … }
 ---
 
 ## 7. 项目文件结构（Xcode 工程目录树）
+
+> ⚠️ 本节为规划期的 Xcode 工程目录设想；实际仓库采用 SwiftPM（`Package.swift` + `Sources/DS4Mate/...`），见 [ADR-009](decisions/ADR-009-project-structure.md)。
 
 > 单文件 ≤ 300 行硬规则限制了深层嵌套。下面是**目标分组结构**，每个 .swift 文件平均约 150–250 行。
 
@@ -634,11 +640,13 @@ projects/ds4mate/
 |-----|------|------|
 | [ADR-001](decisions/ADR-001-tech-stack.md) | Swift + SwiftUI 作为主技术栈 | Accepted |
 | [ADR-002](decisions/ADR-002-menubar-pattern.md) | MenuBarExtra(.window) + LSUIElement 实现菜单栏 App | Accepted |
-| [ADR-003](decisions/ADR-003-controller-framework.md) | 使用 GameController.framework + GCDualShockGamepad 接入 PS4 | Accepted |
+| [ADR-003](decisions/ADR-003-controller-framework.md) | 使用 GameController.framework + GCDualShockGamepad 接入 PS4 | **Superseded**（被 ADR-008 替代） |
 | [ADR-004](decisions/ADR-004-event-synthesis.md) | 通过 CGEvent 合成鼠标/键盘事件 | Accepted |
 | [ADR-005](decisions/ADR-005-persistence.md) | Codable JSON + Application Support 目录持久化 Profile | Accepted |
-| [ADR-006](decisions/ADR-006-project-structure.md) | Xcode Project（非 Swift Package）作为工程结构 | Accepted |
+| [ADR-006](decisions/ADR-006-project-structure.md) | Xcode Project（非 Swift Package）作为工程结构 | **Superseded**（被 ADR-009 替代） |
 | [ADR-007](decisions/ADR-007-testing.md) | XCTest + ViewInspector 作为测试基线 | Accepted |
+| [ADR-008](decisions/ADR-008-controller-hid-manager.md) | 改用 IOHIDManager 直接读 HID 报告接入 PS4 | Accepted |
+| [ADR-009](decisions/ADR-009-project-structure.md) | 采用 Swift Package（Package.swift）作为工程结构 | Accepted |
 
 机器可读契约（替代 openapi.yaml）：[`mapping-profile.schema.json`](decisions/mapping-profile.schema.json)
 

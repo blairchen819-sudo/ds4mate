@@ -210,6 +210,21 @@ RICE 定义（沿用团队基线）：
 
 **键盘 / 鼠标捕获**：编辑器内捕获用户按下的任意键 / 鼠标动作，自动识别为键码，无需用户手填。
 
+### 4.5 附加功能（已实现，初版 PRD 未覆盖）
+
+以下两项功能在开发中实现，但初版 PRD（§1–§10）未覆盖，在此补录。
+
+**F18 桌面切换（Spaces）**
+- 通过 macOS 调度中心（Spaces）切换虚拟桌面（见 `Sources/DS4Mate/Services/SpaceSwitcher.swift`）。
+- 用途：配合预设在多个全屏 App / 桌面之间遥控切换。
+- 依赖：辅助功能（AX）权限；运行时通过动态符号解析调用私有 CGS 接口（`CGSGetConnectionIDForPSN` / `CGSCopyDesktopWorkspace` 等），不链接私有框架。
+
+**F19 千问（Qwen）语音控制**
+- 一键开关通义千问（Qwen）语音通话、切换麦克风静音（见 `Sources/DS4Mate/Services/QwenVoiceController.swift`，动作枚举 `toggleQwenVoice` / `toggleQwenMic`）。
+- 实现方式：经辅助功能（AX）读取千问窗口控件，定位并点击「语音通话」「麦克风」按钮；窗口不在当前桌面时自动跨桌面切换并切回原窗口。
+- 约束：依赖千问客户端界面布局与辅助功能授权；千问改版或窗口不在当前桌面时可能失效（已做跨桌面切换兜底）。
+- 隐私：仅做本地 AX 点击，不读取对话内容、不发起任何网络请求、不上传数据。
+
 ---
 
 ## 5. 用户故事（As a... I want to... So that...）

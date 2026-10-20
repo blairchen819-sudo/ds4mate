@@ -61,16 +61,21 @@ cp Sources/DS4Mate/Resources/presentation.json build/DS4Mate.app/Contents/Resour
 # 「输入监控 / 辅助功能」授权立刻失效，表现为"手柄突然收不到数据"。
 # 自签证书的身份认的是 certificate leaf，重建后授权依然有效。
 SIGN_ID="DS4Mate Local Signing"
-# 证书放在专用钥匙串里，密码写在脚本里（不是机密，只用于本机自签）：
-# 放登录钥匙串的话，每次 codesign 都会弹「输入登录密码」的授权框，没法自动化。
+# 证书放在专用钥匙串里。钥匙串密码从环境变量读取，不要硬编码提交到仓库：
+#   export DS4_SIGN_KC_PASS="你的钥匙串密码"
+# （仅用于本机自签；放登录钥匙串的话每次 codesign 都会弹授权框，无法自动化。）
 SIGN_KC="$HOME/Library/Keychains/ds4sign.keychain-db"
-SIGN_KC_PASS="ds4mate"
+SIGN_KC_PASS="${DS4_SIGN_KC_PASS:-}"
 if [ -f "$SIGN_KC" ] && security find-certificate -c "$SIGN_ID" "$SIGN_KC" >/dev/null 2>&1; then
-  security unlock-keychain -p "$SIGN_KC_PASS" "$SIGN_KC" 2>/dev/null
-  # 必须进搜索列表，否则 codesign 报 "no identity found"
-  security list-keychains -d user -s "$HOME/Library/Keychains/login.keychain-db" "$SIGN_KC" 2>/dev/null
-  echo "→ 签名（$SIGN_ID）"
-  codesign --force --deep --keychain "$SIGN_KC" --sign "$SIGN_ID" build/DS4Mate.app 2>&1 | sed 's/^/  /'
+  if [ -z "$SIGN_KC_PASS" ]; then
+    echo "→ 未设置 DS4_SIGN_KC_PASS，跳过专用钥匙串签名，回退 ad-hoc"
+  else
+    security unlock-keychain -p "$SIGN_KC_PASS" "$SIGN_KC" 2>/dev/null
+    # 必须进搜索列表，否则 codesign 报 "no identity found"
+    security list-keychains -d user -s "$HOME/Library/Keychains/login.keychain-db" "$SIGN_KC" 2>/dev/null
+    echo "→ 签名（$SIGN_ID）"
+    codesign --force --deep --keychain "$SIGN_KC" --sign "$SIGN_ID" build/DS4Mate.app 2>&1 | sed 's/^/  /'
+  fi
 elif security find-certificate -c "$SIGN_ID" ~/Library/Keychains/login.keychain-db >/dev/null 2>&1; then
   echo "→ 签名（$SIGN_ID，登录钥匙串）"
   codesign --force --deep --sign "$SIGN_ID" build/DS4Mate.app 2>&1 | sed 's/^/  /'
