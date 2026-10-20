@@ -4,6 +4,8 @@
 
 **状态**：v1.0 MVP 已完成，90/90 冒烟测试通过，可启动运行。
 
+> **说明**：DS4Mate 是带图形界面的 macOS **菜单栏 App**（`@main App` + `MenuBarExtra`，打包为 `.app` 运行），**不是命令行 / 终端程序**，没有 CLI 参数或终端交互界面。
+
 ---
 
 ## 快速开始
@@ -49,6 +51,8 @@ open build/DS4Mate.app
 | **持久化** | JSON 配置文件存于 `~/Library/Application Support/DS4Mate/profiles/` |
 | **安全** | CGEvent 合成（仅需 Accessibility），不做网络请求，不读任何用户文件 |
 | **数据** | 用户自定义 Profile 支持自动备份损坏文件 |
+| **桌面切换** | 通过调度中心（Spaces）切换虚拟桌面，配合「上一个 / 下一个桌面」系统快捷键预设 |
+| **千问语音控制** | 一键开关通义千问（Qwen）语音通话与麦克风静音；走辅助功能（AX）点击其通话按钮，自动跨桌面切换并切回原窗口 |
 
 ---
 
@@ -57,10 +61,10 @@ open build/DS4Mate.app
 - **语言**：Swift 5.9+ / SwiftUI
 - **最低系统**：macOS 13 Ventura
 - **推荐系统**：macOS 14 Sonoma（完整 MenuBarExtra 能力）
-- **PS4 接入**：Apple 原生 `GameController.framework` → `GCDualShockGamepad`
+- **PS4 接入**：`IOKit` / `IOBluetooth` 的 `IOHIDManager` 直接解析蓝牙 HID 报告（vendor `0x054C`，pid `0x09CC`/`0x05C4`/`0x0CE6`）。_注：早期方案计划用 `GameController.framework`，但 macOS 26 上该框架的 PS4 事件流存在 bug，最终改走 IOHIDManager 绕过，详见 `Sources/DS4Mate/Services/HIDControllerService.swift` 顶部注释。_
 - **事件合成**：CoreGraphics `CGEvent.post(tap: .cgSessionEventTap)`
 - **持久化**：Codable JSON + @AppStorage
-- **打包**：手搓 `.app` bundle + ad-hoc 签名（绕开无 Xcode 限制）
+- **打包**：手搓 `.app` bundle + 自签证书 `DS4Mate Local Signing`（固定签名身份，避免 TCC 在每次重建后使「辅助功能 / 输入监控」授权失效；无证书时回退 ad-hoc，见 `scripts/build.sh`）
 
 ---
 
@@ -118,7 +122,8 @@ ds4mate/
 1. **媒体键未实现**：v1 走 print 提示（`Cmd+Space` 等键盘模拟替代），完整实现需走私有 NSEvent
 2. **PS4 触摸板手势未做**：v1 仅消费 `touchpadButton` 单点，多指手势 v1.1 候选
 3. **PS 键在 GCDualShockGamepad 上不可读**：macOS GameController 框架未暴露 PS/Share/Options 按键，v1 通过反射拿 `shareButton`/`optionsButton` 私有路径
-4. **未签名**：当前是 ad-hoc 签名，Gatekeeper 会弹警告（首次打开需右键 → 打开）
+4. **未上架 App Store / 无 Apple 开发者证书**：用本机自签（无证书时回退 ad-hoc）；Gatekeeper 首次打开会弹警告，需右键 → 打开
+5. **千问语音控制依赖 UI 布局**：通过辅助功能读取千问（Qwen）窗口的按钮，依赖其界面布局与「辅助功能」授权；千问改版或窗口不在当前桌面时可能失效（已做跨桌面切换兜底）
 
 ---
 
