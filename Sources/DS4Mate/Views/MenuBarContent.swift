@@ -60,6 +60,16 @@ struct MenuBarContent: View {
             .padding(.horizontal, 12)
             .padding(.vertical, 6)
 
+            // 打开设置窗口（菜单栏 App 没有常规应用菜单，必须给个显式入口）
+            Button(action: {
+                openSettingsWindow()
+            }) {
+                Label("设置…", systemImage: "gearshape")
+            }
+            .buttonStyle(.plain)
+            .padding(.horizontal, 12)
+            .padding(.vertical, 6)
+
             // 权限状态
             if !permissionMonitor.isAccessibilityGranted {
                 permissionWarning
@@ -246,6 +256,17 @@ struct MenuBarContent: View {
             window.makeKeyAndOrderFront(nil)
         } else {
             openWindow(id: "main")
+        }
+    }
+
+    /// 打开 SwiftUI 的「设置」窗口。
+    /// 菜单栏 App（LSUIElement）没有常规应用菜单，⌘, 在无主窗口时按不到，
+    /// 所以显式触发 SwiftUI 为 Settings scene 注册的 responder action。
+    private func openSettingsWindow() {
+        NSApp.activate(ignoringOtherApps: true)
+        // macOS 14+ 是 showSettingsWindow:，13 及更早是 showPreferencesWindow:
+        if !NSApp.sendAction(Selector(("showSettingsWindow:")), to: nil, from: nil) {
+            NSApp.sendAction(Selector(("showPreferencesWindow:")), to: nil, from: nil)
         }
     }
 }
