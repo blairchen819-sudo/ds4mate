@@ -363,6 +363,7 @@ public enum Action: Codable, Hashable, Sendable {
         case mouse = "鼠标"
         case keyboard = "键盘"
         case workbuddy = "WorkBuddy"
+        case orca = "Orca"
         case system = "系统"
         case media = "媒体"
         case meta = "元动作"

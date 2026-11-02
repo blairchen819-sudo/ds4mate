@@ -143,6 +143,55 @@ struct ActionPickerView: View {
         PickerItem("开发者工具", .keyPress(keyCode: 34, modifiers: [.maskCommand, .maskAlternate]), hint: "⌥⌘I")
     ]
 
+    // MARK: - Orca 快捷键
+
+    /// Orca.app 内置键绑定（`out/shared/keybindings/definitions*.js`）里挑出来的高频项，
+    /// 已按 `~/.orca/keybindings.json` 的个人覆盖修正了 worktree 上/下（⌘↑ / ⌘↓）。
+    /// 每条都是普通 `keyPress`，只在 Orca 窗口聚焦时生效。
+    private static let orcaShortcuts: [PickerItem] = [
+        // —— 全局 / 工作区 ——
+        PickerItem("跳转文件", .keyPress(keyCode: 35, modifiers: [.maskCommand]), hint: "⌘P"),
+        PickerItem("切换 worktree", .keyPress(keyCode: 38, modifiers: [.maskCommand]), hint: "⌘J"),
+        PickerItem("上一个 worktree", .keyPress(keyCode: 126, modifiers: [.maskCommand]), hint: "⌘↑"),
+        PickerItem("下一个 worktree", .keyPress(keyCode: 125, modifiers: [.maskCommand]), hint: "⌘↓"),
+        PickerItem("新建 worktree", .keyPress(keyCode: 45, modifiers: [.maskCommand]), hint: "⌘N"),
+        PickerItem("历史后退", .keyPress(keyCode: 123, modifiers: [.maskCommand, .maskAlternate]), hint: "⌘⌥←"),
+        PickerItem("历史前进", .keyPress(keyCode: 124, modifiers: [.maskCommand, .maskAlternate]), hint: "⌘⌥→"),
+        PickerItem("左侧栏", .keyPress(keyCode: 11, modifiers: [.maskCommand]), hint: "⌘B"),
+        PickerItem("右侧栏", .keyPress(keyCode: 37, modifiers: [.maskCommand]), hint: "⌘L"),
+        PickerItem("资源管理器", .keyPress(keyCode: 14, modifiers: [.maskCommand, .maskShift]), hint: "⌘⇧E"),
+        PickerItem("全局搜索", .keyPress(keyCode: 3, modifiers: [.maskCommand, .maskShift]), hint: "⌘⇧F"),
+        PickerItem("源码管理", .keyPress(keyCode: 5, modifiers: [.maskCommand, .maskShift]), hint: "⌘⇧G"),
+        PickerItem("端口面板", .keyPress(keyCode: 34, modifiers: [.maskCommand, .maskShift]), hint: "⌘⇧I"),
+        PickerItem("浮动终端", .keyPress(keyCode: 0, modifiers: [.maskCommand, .maskAlternate]), hint: "⌘⌥A"),
+        PickerItem("语音输入", .keyPress(keyCode: 14, modifiers: [.maskCommand]), hint: "⌘E"),
+        PickerItem("插件面板", .keyPress(keyCode: 7, modifiers: [.maskCommand, .maskShift]), hint: "⌘⇧X"),
+        // —— 标签 ——
+        PickerItem("新建终端标签", .keyPress(keyCode: 17, modifiers: [.maskCommand]), hint: "⌘T"),
+        PickerItem("新建 agent 标签", .keyPress(keyCode: 17, modifiers: [.maskCommand, .maskAlternate]), hint: "⌘⌥T"),
+        PickerItem("新建浏览器标签", .keyPress(keyCode: 11, modifiers: [.maskCommand, .maskShift]), hint: "⌘⇧B"),
+        PickerItem("新建 Markdown 标签", .keyPress(keyCode: 46, modifiers: [.maskCommand, .maskShift]), hint: "⌘⇧M"),
+        PickerItem("关闭标签", .keyPress(keyCode: 13, modifiers: [.maskCommand]), hint: "⌘W"),
+        PickerItem("恢复关闭的标签", .keyPress(keyCode: 17, modifiers: [.maskCommand, .maskShift]), hint: "⌘⇧T"),
+        PickerItem("上一个标签", .keyPress(keyCode: 33, modifiers: [.maskCommand, .maskShift]), hint: "⌘⇧["),
+        PickerItem("下一个标签", .keyPress(keyCode: 30, modifiers: [.maskCommand, .maskShift]), hint: "⌘⇧]"),
+        PickerItem("重命名标签", .keyPress(keyCode: 15, modifiers: [.maskCommand]), hint: "⌘R"),
+        // —— 终端窗格 ——
+        PickerItem("终端右分屏", .keyPress(keyCode: 2, modifiers: [.maskCommand]), hint: "⌘D"),
+        PickerItem("终端下分屏", .keyPress(keyCode: 2, modifiers: [.maskCommand, .maskShift]), hint: "⌘⇧D"),
+        PickerItem("清空窗格", .keyPress(keyCode: 40, modifiers: [.maskCommand]), hint: "⌘K"),
+        PickerItem("终端搜索", .keyPress(keyCode: 3, modifiers: [.maskCommand]), hint: "⌘F"),
+        PickerItem("下一个窗格", .keyPress(keyCode: 30, modifiers: [.maskCommand]), hint: "⌘]"),
+        PickerItem("上一个窗格", .keyPress(keyCode: 33, modifiers: [.maskCommand]), hint: "⌘["),
+        // —— 编辑器 / 浏览器 ——
+        PickerItem("保存文件", .keyPress(keyCode: 1, modifiers: [.maskCommand]), hint: "⌘S"),
+        PickerItem("Markdown 预览", .keyPress(keyCode: 9, modifiers: [.maskCommand, .maskShift]), hint: "⌘⇧V"),
+        PickerItem("自动换行", .keyPress(keyCode: 6, modifiers: [.maskAlternate]), hint: "⌥Z"),
+        PickerItem("浏览器后退", .keyPress(keyCode: 33, modifiers: [.maskCommand]), hint: "⌘["),
+        PickerItem("浏览器前进", .keyPress(keyCode: 30, modifiers: [.maskCommand]), hint: "⌘]"),
+        PickerItem("重新加载页面", .keyPress(keyCode: 15, modifiers: [.maskCommand]), hint: "⌘R")
+    ]
+
     // MARK: - 分类内容
 
     private var filteredActions: [PickerItem] {
@@ -186,6 +235,8 @@ struct ActionPickerView: View {
                 return modifierActions + (keyActions + chords).map { PickerItem($0) }
             case .workbuddy:
                 return Self.workBuddyShortcuts
+            case .orca:
+                return Self.orcaShortcuts
             case .system:
                 return SystemShortcut.allCases.map {
                     PickerItem($0.displayName, .systemShortcut($0), hint: $0.keyCombo)
@@ -252,6 +303,7 @@ struct ActionPickerView: View {
         case .mouse: return "computermouse"
         case .keyboard: return "keyboard"
         case .workbuddy: return "w.circle"
+        case .orca: return "o.circle"
         case .system: return "gearshape.2"
         case .media: return "playpause"
         case .meta: return "rectangle.stack"
