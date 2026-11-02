@@ -66,6 +66,19 @@ public final class ProfileStore {
         try data.write(to: url, options: .atomic)
     }
 
+    /// 以新名字另存为一份独立的自定义 Profile（新 UUID + 复制全部绑定与参数）。
+    /// 用于「另存为」：把当前键位保存成一个新的命名预设，之后两套互不影响。
+    public func saveAs(_ source: Profile, name: String) throws -> Profile {
+        let copy = Profile(
+            name: name,
+            isBuiltin: false,
+            bindings: source.bindings,
+            parameters: source.parameters
+        )
+        try save(copy)
+        return copy
+    }
+
     /// 删除用户自定义 Profile。
     public func delete(_ profile: Profile) throws {
         guard !profile.isBuiltin else {

@@ -98,6 +98,30 @@ public final class AppState: ObservableObject {
         selectProfile(profiles[nextIndex].id)
     }
 
+    /// 把当前预设另存为一个新的命名预设（复制键位与参数），并切换过去。
+    /// 来源可以是内置或自定义；副本一律是非内置、新 UUID，可独立修改。
+    @discardableResult
+    public func saveActiveProfileAs(name: String) -> Profile? {
+        guard let source = activeProfile else { return nil }
+        let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return nil }
+        guard let copy = try? profileStore.saveAs(source, name: uniqueProfileName(trimmed)) else {
+            return nil
+        }
+        profiles.append(copy)
+        selectProfile(copy.id)
+        return copy
+    }
+
+    /// 同名时自动加序号，避免预设列表里出现两个一模一样的名字。
+    private func uniqueProfileName(_ base: String) -> String {
+        let existing = Set(profiles.map(\.name))
+        guard existing.contains(base) else { return base }
+        var n = 2
+        while existing.contains("\(base) (\(n))") { n += 1 }
+        return "\(base) (\(n))"
+    }
+
     public func updateBinding(in profileID: UUID, input: ControllerInput, action: Action) {
         guard let index = profiles.firstIndex(where: { $0.id == profileID }) else { return }
         let isBuiltin = profiles[index].isBuiltin

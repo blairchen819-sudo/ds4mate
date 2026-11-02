@@ -33,6 +33,11 @@ public final class ControllerService: ObservableObject {
             if !isEnabled { eventSynthesizer.releaseAllModifiers() }
         }
     }
+    /// 全局「切换预设」键：任何预设下按下它都会切到下一套。
+    /// 与 Profile 内的 `.cycleProfile` 绑定并存，但优先级更高，换预设后依然有效。
+    @Published public var profileSwitchInput: ControllerInput? = nil {
+        didSet { persistProfileSwitchInput() }
+    }
     /// 已收到的 HID 报告总数，用于界面自检
     @Published public private(set) var hidReportCount: Int = 0
     /// HID 层自检信息（未连接 / 权限不足 / 已连接）
@@ -77,6 +82,7 @@ public final class ControllerService: ObservableObject {
                 hidService: HIDControllerService = .shared) {
         self.eventSynthesizer = eventSynthesizer
         self.hidService = hidService
+        self.profileSwitchInput = Self.loadProfileSwitchInput()
 
         // 启动 HID 输入
         hidService.start(
@@ -180,8 +186,20 @@ public final class ControllerService: ObservableObject {
         DispatchQueue.main.async {
             self.lastInput = (input, Date())
         }
-        guard isEnabled,
-              let profile = activeProfile,
+        guard isEnabled else { return }
+
+        // 全局「切换预设」键优先于当前 Profile 的绑定：
+        // 这样不论当前是哪套预设，按同一个键都能切到下一套。
+        if let switchInput = profileSwitchInput, input == switchInput {
+            eventStream.send(pressed ? .buttonDown(input) : .buttonUp(input))
+            if pressed {
+                NSLog("[DS4Mate] 全局切换键 \(input.displayName) → 下一个预设")
+                NotificationCenter.default.post(name: .ds4mateCycleProfile, object: nil)
+            }
+            return
+        }
+
+        guard let profile = activeProfile,
               let binding = profile.binding(for: input) else {
             return
         }
@@ -372,6 +390,25 @@ public final class ControllerService: ObservableObject {
             scrollCurrentY = 0
             scrollRemainderX = 0
             scrollRemainderY = 0
+        }
+    }
+
+    // MARK: - 全局切换键持久化
+
+    private static let profileSwitchInputKey = "ds4mate.profileSwitchInput"
+
+    private static func loadProfileSwitchInput() -> ControllerInput? {
+        guard let raw = UserDefaults.standard.string(forKey: profileSwitchInputKey) else {
+            return nil
+        }
+        return ControllerInput(rawValue: raw)
+    }
+
+    private func persistProfileSwitchInput() {
+        if let input = profileSwitchInput {
+            UserDefaults.standard.set(input.rawValue, forKey: Self.profileSwitchInputKey)
+        } else {
+            UserDefaults.standard.removeObject(forKey: Self.profileSwitchInputKey)
         }
     }
 

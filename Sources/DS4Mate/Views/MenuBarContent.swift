@@ -16,11 +16,21 @@ struct MenuBarContent: View {
             Divider()
 
             // Profile 切换
-            Text("预设")
-                .font(.caption)
-                .foregroundStyle(.secondary)
-                .padding(.horizontal, 12)
-                .padding(.top, 8)
+            HStack {
+                Text("预设")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                Spacer()
+                Button {
+                    appState.cycleToNextProfile()
+                } label: {
+                    Image(systemName: "arrow.triangle.2.circlepath")
+                }
+                .buttonStyle(.borderless)
+                .help("切换到下一个预设")
+            }
+            .padding(.horizontal, 12)
+            .padding(.top, 8)
 
             ForEach(appState.profiles) { profile in
                 profileRow(profile)

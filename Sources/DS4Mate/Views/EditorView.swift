@@ -9,6 +9,8 @@ struct EditorView: View {
 
     @State private var selectedInput: ControllerInput? = nil
     @State private var showingActionPicker = false
+    @State private var showingSaveAs = false
+    @State private var newProfileName = ""
 
     var body: some View {
         VStack(spacing: 0) {
@@ -64,6 +66,9 @@ struct EditorView: View {
                 )
                 .frame(minWidth: 560, minHeight: 480)
             }
+        }
+        .sheet(isPresented: $showingSaveAs) {
+            saveAsSheet
         }
         .onChange(of: controllerService.lastInput?.at) { _ in
             // 按手柄键时自动选中该键，右侧面板直接显示它的当前映射
@@ -177,15 +182,22 @@ struct EditorView: View {
 
             Spacer()
 
-            // 复制为自定义
-            if let active = appState.activeProfile, active.isBuiltin {
-                Button {
-                    appState.updateBinding(in: active.id, input: .cross, action: appState.activeProfile?.binding(for: .cross)?.action ?? .none)
-                } label: {
-                    Label("复制为自定义", systemImage: "doc.on.doc")
-                }
-                .help("复制当前内置预设为自己可改的版本")
+            // 切到下一套预设（与手柄上的切换键等效）
+            Button {
+                appState.cycleToNextProfile()
+            } label: {
+                Label("下一个预设", systemImage: "arrow.triangle.2.circlepath")
             }
+            .help("切换到下一套预设")
+
+            // 另存为新的命名预设
+            Button {
+                newProfileName = "\(appState.activeProfile?.name ?? "预设") 副本"
+                showingSaveAs = true
+            } label: {
+                Label("另存为…", systemImage: "square.and.arrow.down.on.square")
+            }
+            .help("把当前预设的键位另存为一个新名字，之后可独立修改")
 
             // 重置
             Button(role: .destructive) {
@@ -197,6 +209,43 @@ struct EditorView: View {
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 10)
+    }
+
+    private var saveAsSheet: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            Text("另存为新预设")
+                .font(.headline)
+            Text("会把当前「\(appState.activeProfile?.name ?? "未选择")」的键位和参数复制一份，之后两套互不影响。")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+
+            TextField("预设名称", text: $newProfileName)
+                .textFieldStyle(.roundedBorder)
+                .onSubmit { commitSaveAs() }
+
+            HStack {
+                Spacer()
+                Button("取消") {
+                    showingSaveAs = false
+                }
+                Button("保存") {
+                    commitSaveAs()
+                }
+                .buttonStyle(.borderedProminent)
+                .disabled(newProfileName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+            }
+        }
+        .padding(20)
+        .frame(width: 380)
+    }
+
+    private func commitSaveAs() {
+        let name = newProfileName.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !name.isEmpty else { return }
+        _ = appState.saveActiveProfileAs(name: name)
+        newProfileName = ""
+        showingSaveAs = false
     }
 
     private var connectionColor: Color {
@@ -247,6 +296,10 @@ struct EditorView: View {
                     .frame(maxWidth: .infinity)
             }
             .buttonStyle(.borderedProminent)
+
+            Text("改动会立即保存到当前预设")
+                .font(.caption2)
+                .foregroundStyle(.secondary)
 
             Spacer()
         }

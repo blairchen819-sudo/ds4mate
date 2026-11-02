@@ -242,6 +242,28 @@ struct DS4MateTestRunner {
         }
 
         // =====================================================
+        // Suite 4b: ProfileStore.saveAs
+        // =====================================================
+        suite("ProfileStore.saveAs") {
+            let store = ProfileStore()
+            let source = BuiltInProfiles.makeDefault()
+            let name = "另存测试-\(UUID().uuidString.prefix(8))"
+            do {
+                let copy = try store.saveAs(source, name: name)
+                expectEqual(copy.name, name, "另存为名称正确")
+                expect(!copy.isBuiltin, "另存为得到自定义 Profile")
+                expect(copy.id != source.id, "另存为生成新 ID")
+                expectEqual(copy.bindings.count, source.bindings.count, "另存为绑定数一致")
+                let reloaded = store.loadAll()
+                expect(reloaded.contains(where: { $0.id == copy.id }), "另存为落盘后可重新加载")
+                try? store.delete(copy)
+            } catch {
+                print("  ✗ saveAs 失败：\(error)")
+                failed += 1
+            }
+        }
+
+        // =====================================================
         // Suite 5: JSON Resource
         // =====================================================
         suite("JSON Resource 文件") {

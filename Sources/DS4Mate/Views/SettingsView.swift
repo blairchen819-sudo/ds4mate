@@ -28,6 +28,20 @@ struct SettingsView: View {
                 )
                 Toggle("启用映射", isOn: binding)
             }
+            Section("预设切换") {
+                Picker("切换预设按键", selection: Binding(
+                    get: { controllerService.profileSwitchInput },
+                    set: { controllerService.profileSwitchInput = $0 }
+                )) {
+                    Text("未设置").tag(ControllerInput?.none)
+                    ForEach(ControllerInput.allCases.filter { !$0.isAnalog }, id: \.self) { input in
+                        Text(input.displayName).tag(Optional(input))
+                    }
+                }
+                Text("设置后，在任何预设下按下这个键都会切换到下一套预设；换预设后依然有效。")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
             Section("数据") {
                 LabeledContent("Profile 目录") {
                     Text(appState.profileStore.profilesDirectoryPath)
