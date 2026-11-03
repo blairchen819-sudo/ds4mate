@@ -34,8 +34,9 @@ struct EditorView: View {
                 ControllerVisual(
                     selectedInput: selectedInput,
                     onSelect: { input in
+                        // 单击只负责选中，右侧面板展示当前绑定；
+                        // 改键要由用户明确点「编辑」才会打开选择器。
                         selectedInput = input
-                        showingActionPicker = true
                     }
                 )
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -266,44 +267,105 @@ struct EditorView: View {
 
     private func bindingDetailPanel(input: ControllerInput) -> some View {
         let binding = appState.activeProfile?.binding(for: input)
-        return VStack(alignment: .leading, spacing: 16) {
-            HStack {
-                Text(input.displayName)
-                    .font(.title2)
-                Spacer()
-                if input.isAnalog {
-                    Text("模拟轴")
+        let action = binding?.action ?? .none
+        let isGlobalSwitchKey = controllerService.profileSwitchInput == input
+
+        return ScrollView {
+            VStack(alignment: .leading, spacing: 16) {
+                // 标题：按键名 + 硬件类型
+                HStack(alignment: .center) {
+                    Text(input.displayName)
+                        .font(.title2.weight(.semibold))
+                    Spacer()
+                    Text(input.kindLabel)
+                        .font(.caption2)
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 3)
+                        .background(Color.secondary.opacity(0.15))
+                        .clipShape(Capsule())
+                }
+
+                // 与全局切换键冲突时明确告知，否则用户会以为绑定坏了
+                if isGlobalSwitchKey {
+                    HStack(alignment: .top, spacing: 6) {
+                        Image(systemName: "exclamationmark.triangle.fill")
+                            .foregroundStyle(.orange)
+                        Text("这个键已被设为「全局预设切换键」，按下会切换预设，下面的绑定不会触发。")
+                            .font(.caption)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                    .padding(8)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .background(Color.orange.opacity(0.12))
+                    .clipShape(RoundedRectangle(cornerRadius: 7, style: .continuous))
+                }
+
+                // 当前绑定 + 它对应的快捷功能
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("当前绑定")
                         .font(.caption)
                         .foregroundStyle(.secondary)
+
+                    HStack(spacing: 10) {
+                        Image(systemName: action.category.iconName)
+                            .font(.title3)
+                            .foregroundStyle(.secondary)
+                            .frame(width: 24)
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(action.displayName)
+                                .font(.title3.weight(.medium))
+                            Text(action.category.rawValue)
+                                .font(.caption2)
+                                .foregroundStyle(.secondary)
+                        }
+                        Spacer()
+                    }
+
+                    Text(action.functionDescription)
+                        .font(.callout)
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
                 }
-            }
+                .padding(12)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(Color(nsColor: .textBackgroundColor))
+                .clipShape(RoundedRectangle(cornerRadius: 9, style: .continuous))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 9, style: .continuous)
+                        .strokeBorder(Color.secondary.opacity(0.22), lineWidth: 1)
+                )
 
-            Divider()
+                // 编辑入口：只有点这里才会打开动作选择器
+                Button {
+                    showingActionPicker = true
+                } label: {
+                    Label("编辑", systemImage: "pencil")
+                        .frame(maxWidth: .infinity)
+                }
+                .buttonStyle(.borderedProminent)
+                .controlSize(.large)
+                .help("打开动作选择器，给这个键换一个绑定")
 
-            VStack(alignment: .leading, spacing: 6) {
-                Text("当前动作")
-                    .font(.caption)
+                Button {
+                    if let profile = appState.activeProfile {
+                        appState.updateBinding(in: profile.id, input: input, action: .none)
+                    }
+                } label: {
+                    Label("设为禁用", systemImage: "minus.circle")
+                        .frame(maxWidth: .infinity)
+                }
+                .disabled(action == Action.none)
+                .help("保留这个键，但不触发任何动作")
+
+                Spacer(minLength: 0)
+
+                Text("改动会立即保存到「\(appState.activeProfile?.name ?? "当前预设")」")
+                    .font(.caption2)
                     .foregroundStyle(.secondary)
-                Text(binding?.action.displayName ?? "未绑定")
-                    .font(.title3)
-                    .foregroundStyle(.primary)
             }
-
-            Button {
-                showingActionPicker = true
-            } label: {
-                Label("改键", systemImage: "pencil")
-                    .frame(maxWidth: .infinity)
-            }
-            .buttonStyle(.borderedProminent)
-
-            Text("改动会立即保存到当前预设")
-                .font(.caption2)
-                .foregroundStyle(.secondary)
-
-            Spacer()
+            .padding(20)
+            .frame(maxWidth: .infinity, alignment: .leading)
         }
-        .padding(20)
         .background(Color(nsColor: .controlBackgroundColor))
     }
 
@@ -314,7 +376,7 @@ struct EditorView: View {
                 .foregroundStyle(.secondary)
             Text("点击手柄上的任一按键")
                 .font(.headline)
-            Text("可以查看或修改该按键的映射动作")
+            Text("右侧会显示它当前绑定的动作和对应功能；\n确认要改再点「编辑」进入动作选择器。")
                 .font(.caption)
                 .foregroundStyle(.secondary)
                 .multilineTextAlignment(.center)

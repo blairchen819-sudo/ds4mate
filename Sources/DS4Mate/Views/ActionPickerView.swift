@@ -63,7 +63,7 @@ struct ActionPickerView: View {
                             selectedCategory = category
                         } label: {
                             HStack {
-                                Image(systemName: categoryIcon(category))
+                                Image(systemName: category.iconName)
                                 Text(category.rawValue)
                                 Spacer()
                             }
@@ -296,18 +296,6 @@ struct ActionPickerView: View {
             )
         }
         .buttonStyle(.plain)
-    }
-
-    private func categoryIcon(_ category: Action.Category) -> String {
-        switch category {
-        case .mouse: return "computermouse"
-        case .keyboard: return "keyboard"
-        case .workbuddy: return "w.circle"
-        case .orca: return "o.circle"
-        case .system: return "gearshape.2"
-        case .media: return "playpause"
-        case .meta: return "rectangle.stack"
-        }
     }
 
     private func actionIcon(_ action: Action) -> String {

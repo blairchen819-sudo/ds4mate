@@ -67,4 +67,15 @@ public enum ControllerInput: String, Codable, CaseIterable, Hashable, Sendable {
             return false
         }
     }
+
+    /// 硬件类型标签（详情面板右上角的胶囊标记）
+    public var kindLabel: String {
+        switch self {
+        case .leftTriggerAxis, .rightTriggerAxis: return "扳机"
+        case .leftStickX, .leftStickY, .rightStickX, .rightStickY: return "摇杆轴"
+        case .touchpadButton: return "触摸板"
+        case .l3, .r3: return "摇杆按下"
+        default: return "按钮"
+        }
+    }
 }

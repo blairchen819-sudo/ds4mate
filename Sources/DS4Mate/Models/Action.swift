@@ -288,6 +288,59 @@ public enum Action: Codable, Hashable, Sendable {
         }
     }
 
+    /// 一句话说明这个动作**实际会做什么**（右侧详情面板用）。
+    /// `displayName` 只是简短标签（"⌘⇧4"），用户看不出它会触发什么，这里补上语义。
+    public var functionDescription: String {
+        switch self {
+        case .none:
+            return "该键被禁用，按下不会有任何反应"
+        case .mouseLeftClick:
+            return "模拟一次鼠标左键单击（按下 + 抬起）"
+        case .mouseRightClick:
+            return "模拟一次鼠标右键单击，弹出右键菜单"
+        case .mouseMiddleClick:
+            return "模拟一次鼠标中键单击"
+        case .mouseDoubleClick:
+            return "模拟一次鼠标左键双击"
+        case .mouseDragToggle:
+            return "按一次按住左键进入拖拽，再按一次松开"
+        case .mouseMoveCursor:
+            return "按住期间按摇杆方向持续移动鼠标指针"
+        case .scroll:
+            return "按住期间按摇杆方向持续滚动"
+        case .fineScroll:
+            return "扳机行程越深滚动越快（精细档位）"
+        case .keyPress(let code, let modifiers):
+            let combo = Self.modifierString(modifiers)
+            let key = Self.keyName(for: code)
+            return combo.isEmpty ? "敲击一次 \(key)" : "发送快捷键 \(combo)\(key)"
+        case .keyChord(let codes, let modifiers):
+            let combo = Self.modifierString(modifiers)
+            let keys = codes.map { Self.keyName(for: $0) }.joined(separator: " + ")
+            return combo.isEmpty
+                ? "依次敲击 \(keys)"
+                : "按住 \(combo) 并依次敲击 \(keys)"
+        case .holdModifier(let key):
+            return "手柄按住期间保持 \(key.displayName) 按下，松开即释放，可与其他动作组合"
+        case .systemShortcut(let shortcut):
+            return "触发系统快捷键 \(shortcut.keyCombo) —— \(shortcut.displayName)"
+        case .mediaKey(let media):
+            return "媒体控制：\(media.displayName)"
+        case .exitApp:
+            return "退出 DS4Mate，手柄映射随之停止"
+        case .toggleAppEnabled:
+            return "临时开关手柄映射，不退出应用"
+        case .cycleProfile:
+            return "切换到下一套预设，与设置里的全局切换键等效"
+        case .openMainWindow:
+            return "弹出键位编辑器主窗口"
+        case .toggleQwenVoice:
+            return "通过辅助功能接口点击千问客户端的语音通话按钮"
+        case .toggleQwenMic:
+            return "通过辅助功能接口点击千问客户端的麦克风按钮"
+        }
+    }
+
     // MARK: - Hashable（手动实现以避免 CGEventFlags 不符合 Hashable）
 
     public func hash(into hasher: inout Hasher) {
@@ -367,6 +420,19 @@ public enum Action: Codable, Hashable, Sendable {
         case system = "系统"
         case media = "媒体"
         case meta = "元动作"
+
+        /// 分类对应的 SF Symbol（选择器侧栏与详情面板共用）
+        public var iconName: String {
+            switch self {
+            case .mouse: return "computermouse"
+            case .keyboard: return "keyboard"
+            case .workbuddy: return "w.circle"
+            case .orca: return "o.circle"
+            case .system: return "gearshape.2"
+            case .media: return "playpause"
+            case .meta: return "rectangle.stack"
+            }
+        }
     }
 
     public var category: Category {
