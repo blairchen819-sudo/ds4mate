@@ -269,6 +269,8 @@ struct EditorView: View {
         let binding = appState.activeProfile?.binding(for: input)
         let action = binding?.action ?? .none
         let isGlobalSwitchKey = controllerService.profileSwitchInput == input
+        // 同一个键组合在不同 app 里含义不同，这里把语义查出来按 app 分组展示
+        let appSemantics = ShortcutCatalog.groupedMatches(for: action)
 
         return ScrollView {
             VStack(alignment: .leading, spacing: 16) {
@@ -334,6 +336,35 @@ struct EditorView: View {
                     RoundedRectangle(cornerRadius: 9, style: .continuous)
                         .strokeBorder(Color.secondary.opacity(0.22), lineWidth: 1)
                 )
+
+                // 这条快捷键在对应软件里到底是什么功能
+                // （Orca 预设就显示「Orca · 跳转文件」，而不是只丢一个 ⌘P）
+                if !appSemantics.isEmpty {
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("在程序里的功能")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+
+                        ForEach(Array(appSemantics.enumerated()), id: \.offset) { _, group in
+                            HStack(alignment: .firstTextBaseline, spacing: 8) {
+                                Text(group.app)
+                                    .font(.caption2.weight(.semibold))
+                                    .padding(.horizontal, 6)
+                                    .padding(.vertical, 2)
+                                    .background(Color.accentColor.opacity(0.16))
+                                    .clipShape(Capsule())
+                                Text(group.titles.joined(separator: " / "))
+                                    .font(.callout)
+                                    .fixedSize(horizontal: false, vertical: true)
+                                Spacer(minLength: 0)
+                            }
+                        }
+                    }
+                    .padding(12)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .background(Color.accentColor.opacity(0.06))
+                    .clipShape(RoundedRectangle(cornerRadius: 9, style: .continuous))
+                }
 
                 // 编辑入口：只有点这里才会打开动作选择器
                 Button {
