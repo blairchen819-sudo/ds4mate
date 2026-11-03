@@ -97,6 +97,8 @@ public final class ProfileStore {
             ])
         }
         let url = profilesDirectory.appendingPathComponent("\(profile.id.uuidString).json")
+        // 文件已经不在（例如手动删过）也算删除成功，避免 UI 卡在「删不掉」的状态
+        guard fileManager.fileExists(atPath: url.path) else { return }
         try fileManager.removeItem(at: url)
     }
 

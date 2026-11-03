@@ -12,6 +12,9 @@ struct EditorView: View {
     @State private var showingSaveAs = false
     @State private var newProfileName = ""
     @State private var showingResetConfirm = false
+    @State private var pendingDeleteProfile: Profile?
+    @State private var showingDeleteConfirm = false
+    @State private var deleteFailedMessage: String?
 
     var body: some View {
         VStack(spacing: 0) {
@@ -90,6 +93,31 @@ struct EditorView: View {
             Button("取消", role: .cancel) {}
         } message: {
             Text("会连同你自己创建的预设一起删除，只保留一份初始预设。此操作不可撤销。")
+        }
+        .confirmationDialog(
+            "删除预设「\(pendingDeleteProfile?.name ?? "")」？",
+            isPresented: $showingDeleteConfirm,
+            titleVisibility: .visible
+        ) {
+            Button("删除", role: .destructive) {
+                guard let target = pendingDeleteProfile else { return }
+                if !appState.deleteProfile(target.id) {
+                    deleteFailedMessage = "删除失败：文件可能被占用，或这是最后一份预设。"
+                }
+                pendingDeleteProfile = nil
+                selectedInput = nil
+            }
+            Button("取消", role: .cancel) { pendingDeleteProfile = nil }
+        } message: {
+            Text("预设文件会从磁盘移除，此操作不可撤销。")
+        }
+        .alert("无法删除预设", isPresented: Binding(
+            get: { deleteFailedMessage != nil },
+            set: { if !$0 { deleteFailedMessage = nil } }
+        )) {
+            Button("好", role: .cancel) { deleteFailedMessage = nil }
+        } message: {
+            Text(deleteFailedMessage ?? "")
         }
     }
 
@@ -213,6 +241,16 @@ struct EditorView: View {
                 Label("另存为…", systemImage: "square.and.arrow.down.on.square")
             }
             .help("把当前预设的键位另存为一个新名字，之后可独立修改")
+
+            // 删除当前预设
+            Button(role: .destructive) {
+                pendingDeleteProfile = appState.activeProfile
+                showingDeleteConfirm = true
+            } label: {
+                Label("删除预设", systemImage: "trash")
+            }
+            .disabled(appState.profiles.count <= 1)
+            .help(appState.profiles.count <= 1 ? "至少要保留一份预设" : "删除当前预设（不可撤销）")
 
             // 重置
             Button(role: .destructive) {

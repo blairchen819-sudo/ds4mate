@@ -201,17 +201,62 @@ struct MenuBarContent: View {
     }
 
     private func profileRow(_ profile: Profile) -> some View {
-        Button(action: { appState.selectProfile(profile.id) }) {
-            HStack {
-                Image(systemName: appState.activeProfile?.id == profile.id ? "checkmark.circle.fill" : "circle")
-                    .foregroundStyle(appState.activeProfile?.id == profile.id ? Color.accentColor : .secondary)
-                Text(profile.name)
-                Spacer()
+        HStack(spacing: 8) {
+            Button(action: { appState.selectProfile(profile.id) }) {
+                HStack {
+                    Image(systemName: appState.activeProfile?.id == profile.id ? "checkmark.circle.fill" : "circle")
+                        .foregroundStyle(appState.activeProfile?.id == profile.id ? Color.accentColor : .secondary)
+                    Text(profile.name)
+                        .lineLimit(1)
+                        .truncationMode(.middle)
+                    Spacer(minLength: 0)
+                }
+                .contentShape(Rectangle())
             }
-            .padding(.horizontal, 12)
-            .padding(.vertical, 4)
+            .buttonStyle(.plain)
+
+            // 删除：最后一份不允许删，避免掉进「一份预设都没有」的死状态
+            Button {
+                confirmDelete(profile)
+            } label: {
+                Image(systemName: "trash")
+                    .font(.caption)
+            }
+            .buttonStyle(.borderless)
+            .foregroundStyle(.secondary)
+            .disabled(appState.profiles.count <= 1)
+            .opacity(appState.profiles.count <= 1 ? 0.25 : 0.55)
+            .help(appState.profiles.count <= 1 ? "至少要保留一份预设" : "删除「\(profile.name)」")
         }
-        .buttonStyle(.plain)
+        .padding(.horizontal, 12)
+        .padding(.vertical, 4)
+        .contextMenu {
+            Button("删除预设…") { confirmDelete(profile) }
+                .disabled(appState.profiles.count <= 1)
+        }
+    }
+
+    /// 菜单栏弹窗里用 AppKit 的模态确认框：SwiftUI 的 confirmationDialog 挂在
+    /// MenuBarExtra 这种临时窗口上时，偶尔会随弹窗收起而不显示，用 NSAlert 更稳。
+    private func confirmDelete(_ profile: Profile) {
+        NSApp.activate(ignoringOtherApps: true)
+
+        let alert = NSAlert()
+        alert.messageText = "删除预设「\(profile.name)」？"
+        alert.informativeText = "预设文件会从磁盘移除，此操作不可撤销。"
+        alert.alertStyle = .warning
+        alert.addButton(withTitle: "删除")
+        alert.addButton(withTitle: "取消")
+        guard alert.runModal() == .alertFirstButtonReturn else { return }
+
+        if !appState.deleteProfile(profile.id) {
+            let failure = NSAlert()
+            failure.messageText = "删除失败"
+            failure.informativeText = "文件可能被占用，或这是最后一份预设。"
+            failure.alertStyle = .warning
+            failure.addButton(withTitle: "好")
+            failure.runModal()
+        }
     }
 
     private var permissionWarning: some View {

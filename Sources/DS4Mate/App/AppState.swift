@@ -136,6 +136,32 @@ public final class AppState: ObservableObject {
         }
     }
 
+    /// 删除一份预设。至少保留一份，删除最后一份会返回 false。
+    /// 删掉正在使用的那份时，自动切到列表里的下一份（末尾则切到前一份）。
+    @discardableResult
+    public func deleteProfile(_ id: UUID) -> Bool {
+        guard profiles.count > 1,
+              let index = profiles.firstIndex(where: { $0.id == id }) else {
+            return false
+        }
+        let profile = profiles[index]
+        do {
+            try profileStore.delete(profile)
+        } catch {
+            return false
+        }
+        profiles.remove(at: index)
+
+        if activeProfile?.id == id {
+            // 先算好要切到的那份：删的是最后一项时取新的最后一项
+            let next = profiles[min(index, profiles.count - 1)]
+            selectProfile(next.id)
+        } else {
+            persistRuntime()
+        }
+        return true
+    }
+
     /// 删除全部预设，并恢复为一份初始预设。
     /// 破坏性操作：会连同用户自己创建的预设一起删掉，调用前必须二次确认。
     public func resetAllProfiles() {

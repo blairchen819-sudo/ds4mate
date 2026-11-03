@@ -206,6 +206,15 @@ struct DS4MateTestRunner {
                 }
                 try? store.delete(custom)
                 expectEqual(store.loadAll().count, 1, "删除后只剩初始预设")
+
+                // 重复删除应当幂等（文件已经不在了）
+                do {
+                    try store.delete(custom)
+                    expect(true, "重复删除不报错（幂等）")
+                } catch {
+                    print("  ✗ 重复删除报错：\(error)")
+                    failed += 1
+                }
             } catch {
                 print("  ✗ 保存/加载失败：\(error)")
                 failed += 1
