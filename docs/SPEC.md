@@ -21,9 +21,9 @@
 |--------|------|-------------|-----------|
 | P0 | F1 蓝牙自动连接 + 自动重连 PS4 DualShock 4 | AC-1, AC-2 | 10.0 |
 | P0 | F2 菜单栏图标 + 启停总开关 + 连接状态指示 | 主菜单下拉展开 < 100ms | 20.0 |
-| P0 | F3 默认可用映射（默认/媒体/演示 三套） | AC-4, AC-6 | 15.0 |
+| P0 | F3 开箱可用映射（首次启动自动生成一份初始预设） | AC-4, AC-6 | 15.0 |
 | P0 | F4 可视化键位编辑器（按 PS4 按键 → 动作选择器） | AC-5 | 4.8 |
-| P0 | F5 三套预设：默认 / 媒体遥控 / 演示 | AC-6 | 10.0 |
+| P0 | F5 预设管理：另存为 / 多套切换 / 全局切换键（不内置固定预设） | AC-6 | 10.0 |
 | P0 | F6 Accessibility 权限引导（首启动 + 缺失检测 + 1.5s 轮询） | AC-8, AC-9 | 20.0 |
 | P1 | F7 断开检测 + 自动暂停（防误触卡键） | AC-3 | 6.4 |
 | P1 | F8 死区 / 灵敏度 / 响应曲线调节 | 边界条件 | 1.87 |
@@ -130,8 +130,7 @@ Action: enum        # 见 §6
 | 资源 | 路径 |
 |------|------|
 | Profile 目录 | `~/Library/Application Support/DS4Mate/profiles/` |
-| 默认 Profile | 同目录下 `default.json` / `media.json` / `presentation.json`（isBuiltin=true 不可删） |
-| 用户自定义 Profile | `~/Library/Application Support/DS4Mate/profiles/{uuid}.json` |
+| 预设文件 | 全部为 `{uuid}.json`；应用不内置固定预设，首次启动（目录为空）时自动生成一份初始预设 |
 | 应用偏好 | `~/Library/Preferences/com.ds4mate.app.plist`（@AppStorage 走 UserDefaults） |
 | 日志 | `~/Library/Logs/DS4Mate/{date}.log`（v1.1 候选，v1 可走 os_log） |
 
@@ -256,30 +255,33 @@ struct AppRuntimeState: Codable {
 }
 ```
 
-### 6.5 默认三套 Profile 绑定表（锁定）
+### 6.5 初始预设绑定表
 
-| DS4 按键 | 默认 Preset | 媒体 Preset | 演示 Preset |
-|----------|-------------|-------------|-------------|
-| leftStickX/Y | scroll（持续） | none | dpadKeys |
-| rightStickX/Y | mouseMoveCursor | volumeUpDown | mouseMoveCursor |
-| leftTriggerAxis | fineScroll | volumeDown | pageUp |
-| rightTriggerAxis | fineScroll | volumeUp | pageDown |
-| cross | mouseLeftClick | playPause | nextSlide |
-| circle | mouseRightClick | stop | escape |
-| square | mouseMiddleClick | previous | hideWindow |
-| triangle | mouseDoubleClick | next | switchApp |
-| l1 | browserBack | previous | pageUp |
-| r1 | browserForward | next | pageDown |
-| l3 | mouseDragToggle | none | none |
-| r3 | openLaunchpad | none | none |
-| dpadUp | missionControl | none | none |
-| dpadDown | appExpose | none | none |
-| dpadLeft | browserBack | previous | none |
-| dpadRight | browserForward | next | none |
-| **ps** | **none（禁用，RESOLVED 2026-10-18）** | none | none |
-| share | screenshotSelection | none | none |
-| touchpadButton | missionControl | mute | none |
-| options | exitApp | exitApp | exitApp |
+应用已不再内置固定的多套预设。仅当 Profile 目录为空（首次启动，或用户把预设全删了）时，
+自动生成下面这一份**初始预设**。它是普通预设（`isBuiltin=false`），可改、可另存、可删。
+
+| DS4 按键 | 初始预设 |
+|----------|----------|
+| leftStickX/Y | scroll |
+| rightStickX/Y | mouseMoveCursor |
+| leftTriggerAxis | fineScroll |
+| rightTriggerAxis | fineScroll |
+| cross | mouseLeftClick |
+| circle | mouseRightClick |
+| square | mouseMiddleClick |
+| triangle | mouseDoubleClick |
+| l1 | browserBack |
+| r1 | browserForward |
+| l3 | mouseDragToggle |
+| r3 | openLaunchpad |
+| dpadUp | missionControl |
+| dpadDown | appExpose |
+| dpadLeft | browserBack |
+| dpadRight | browserForward |
+| **ps** | **none（禁用，RESOLVED 2026-10-18）** |
+| share | screenshotSelection |
+| touchpadButton | missionControl |
+| options | exitApp |
 
 ---
 
@@ -429,11 +431,10 @@ open build/Release/DS4Mate.app
 # 5. 预期：5 秒内重新连接，按 × 再次可用
 
 # 场景 C：Profile 损坏
-# 1. 手动编辑 ~/Library/Application Support/DS4Mate/profiles/default.json
-#    注入非法 JSON
+# 1. 任选 ~/Library/Application Support/DS4Mate/profiles/{uuid}.json，注入非法 JSON
 # 2. 重启 App
-# 3. 预期：损坏文件备份为 *.broken.{timestamp}.json，加载内置默认 Profile
-# 4. 预期：其他 Profile 正常加载
+# 3. 预期：损坏文件备份为 *.broken.{timestamp}.json，不再被加载
+# 4. 预期：其余预设正常加载；若目录因此被清空，则自动生成一份初始预设
 ```
 
 ### 12.4 自动化测试

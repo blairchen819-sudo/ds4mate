@@ -8,6 +8,7 @@
 > - **工程形态**：`architecture.md` §K6 写「Xcode project（非 Swift Package）」，实际仓库用 SwiftPM（`Package.swift`）。
 > - **千问语音控制 / 桌面切换**：这两项实际已实现（见 `QwenVoiceController.swift` / `SpaceSwitcher.swift`），但规划文档未覆盖。
 > - **收敛记录（2026-10-20）**：上述分歧已通过新增 ADR-008（控制器框架改为 IOHIDManager）、ADR-009（工程结构改为 SwiftPM）并补录 PRD §4.5（附加功能）得到修正；ADR-003 与 ADR-006 标记为 Superseded。
+> - **预设模型变更（2026-11-03）**：应用已删除内置的「默认 / 媒体遥控 / 演示」三套固定预设，全部预设改为用户自建；目录为空时自动生成一份初始预设。SPEC §6.5 已同步为初始预设表；PRD / architecture 中的「三套预设」表述保留为历史规划记录。
 
 ## 文档导航
 

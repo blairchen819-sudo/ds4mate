@@ -25,7 +25,8 @@ DS4Mate 需要持久化的两类数据：
 - **类别 2（Profile 集合）用 `CodableJSONProfileStore`**，每个 Profile 一个独立 JSON 文件
   - 路径：`~/Library/Application Support/DS4Mate/profiles/{uuid}.json`
   - 备份/迁移友好：用户复制目录即可
-  - 内置默认 Profile 放 `DS4Mate.app/Contents/Resources/DS4MateProfiles/`（只读），首次启动如果 profiles 目录空，从内置复制过去
+  - ~~内置默认 Profile 放 `DS4Mate.app/Contents/Resources/DS4MateProfiles/`（只读），首次启动如果 profiles 目录空，从内置复制过去~~
+  - **2026-11-03 更新**：应用不再内置任何预设。`ProfileStore.loadAll()` 在目录为空时用代码生成一份初始预设（普通预设，可改可删）；包内不再携带预设 JSON。
 
 JSON Schema（机器可读契约）见 `mapping-profile.schema.json`。Profile 形状稳定后用 JSON Schema **锁住字段名与类型**，后续 Sprint 任何变更先改 Schema。
 

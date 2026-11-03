@@ -27,11 +27,11 @@ public final class AppState: ObservableObject {
         self.controllerService = controllerService
         self.permissionMonitor = permissionMonitor
 
+        // loadAll() 在目录为空时会自动补一份初始预设，所以这里不会是空列表
         let allProfiles = profileStore.loadAll()
         self.profiles = allProfiles
         self.hasCompletedOnboarding = false  // 先初始化默认值
-        self.activeProfile = allProfiles.first(where: { $0.id == BuiltInProfiles.defaultProfileID })
-                       ?? allProfiles.first
+        self.activeProfile = allProfiles.first
         self.selectedProfileID = self.activeProfile?.id
 
         // 加载首启动状态
@@ -99,7 +99,7 @@ public final class AppState: ObservableObject {
     }
 
     /// 把当前预设另存为一个新的命名预设（复制键位与参数），并切换过去。
-    /// 来源可以是内置或自定义；副本一律是非内置、新 UUID，可独立修改。
+    /// 副本一律是新 UUID，可独立修改。
     @discardableResult
     public func saveActiveProfileAs(name: String) -> Profile? {
         guard let source = activeProfile else { return nil }
@@ -124,40 +124,28 @@ public final class AppState: ObservableObject {
 
     public func updateBinding(in profileID: UUID, input: ControllerInput, action: Action) {
         guard let index = profiles.firstIndex(where: { $0.id == profileID }) else { return }
-        let isBuiltin = profiles[index].isBuiltin
-        if isBuiltin {
-            // 内置 Profile 复制为自定义 Profile
-            let copy = Profile(
-                name: "\(profiles[index].name)（自定义）",
-                isBuiltin: false,
-                bindings: profiles[index].bindings,
-                parameters: profiles[index].parameters
-            )
-            profiles.append(copy)
-            updateBinding(in: copy.id, input: input, action: action)
-            selectProfile(copy.id)
+        if let bIndex = profiles[index].bindings.firstIndex(where: { $0.input == input }) {
+            profiles[index].bindings[bIndex].action = action
         } else {
-            if let bIndex = profiles[index].bindings.firstIndex(where: { $0.input == input }) {
-                profiles[index].bindings[bIndex].action = action
-            } else {
-                profiles[index].bindings.append(KeyBinding(input: input, action: action))
-            }
-            try? profileStore.save(profiles[index])
-            if activeProfile?.id == profileID {
-                controllerService.activeProfile = profiles[index]
-                activeProfile = profiles[index]
-            }
+            profiles[index].bindings.append(KeyBinding(input: input, action: action))
+        }
+        try? profileStore.save(profiles[index])
+        if activeProfile?.id == profileID {
+            controllerService.activeProfile = profiles[index]
+            activeProfile = profiles[index]
         }
     }
 
-    public func resetToBuiltIn() {
-        let builtins = BuiltInProfiles.makeAll()
-        // 删除所有用户自定义
-        for p in profiles where !p.isBuiltin {
+    /// 删除全部预设，并恢复为一份初始预设。
+    /// 破坏性操作：会连同用户自己创建的预设一起删掉，调用前必须二次确认。
+    public func resetAllProfiles() {
+        for p in profiles {
             try? profileStore.delete(p)
         }
-        profiles = builtins
-        selectProfile(BuiltInProfiles.defaultProfileID)
+        let starter = ProfileStore.makeStarterProfile()
+        try? profileStore.save(starter)
+        profiles = [starter]
+        selectProfile(starter.id)
     }
 
     public func completeOnboarding() {

@@ -207,11 +207,6 @@ struct MenuBarContent: View {
                     .foregroundStyle(appState.activeProfile?.id == profile.id ? Color.accentColor : .secondary)
                 Text(profile.name)
                 Spacer()
-                if profile.isBuiltin {
-                    Text("内置")
-                        .font(.caption2)
-                        .foregroundStyle(.secondary)
-                }
             }
             .padding(.horizontal, 12)
             .padding(.vertical, 4)

@@ -138,85 +138,55 @@ struct DS4MateTestRunner {
         }
 
         // =====================================================
-        // Suite 3: Profile + BuiltInProfiles
+        // Suite 3: 初始预设
         // =====================================================
-        suite("BuiltInProfiles") {
-            let all = BuiltInProfiles.makeAll()
-            expectEqual(all.count, 3, "内置 Profile 总数 3")
-
-            let defaultProfile = BuiltInProfiles.makeDefault()
-            expectEqual(defaultProfile.name, "默认", "默认 Profile 名称")
-            expect(defaultProfile.isBuiltin, "默认 Profile isBuiltin=true")
+        suite("初始预设") {
+            let starter = ProfileStore.makeStarterProfile()
+            expectEqual(starter.name, "默认", "初始预设名称")
+            expect(!starter.isBuiltin, "初始预设是普通预设（非内置）")
             for input in ControllerInput.allCases {
-                let hasBinding = defaultProfile.binding(for: input) != nil
-                expect(hasBinding, "默认 Profile 有 \(input.displayName) 绑定")
+                expect(starter.binding(for: input) != nil, "初始预设覆盖 \(input.displayName)")
             }
 
-            let mediaProfile = BuiltInProfiles.makeMedia()
-            expectEqual(mediaProfile.name, "媒体遥控", "媒体 Profile 名称")
-            if let binding = mediaProfile.binding(for: .cross) {
-                if case .mediaKey(let m) = binding.action {
-                    expectEqual(m, .playPause, "媒体 × 键 = playPause")
+            // PS 键默认禁用（避免误触）
+            if let binding = starter.binding(for: .ps) {
+                if case .none = binding.action {
+                    expect(true, "初始预设 PS 键禁用")
                 } else {
-                    print("  ✗ 媒体 × 键不是媒体键")
+                    print("  ✗ 初始预设 PS 键应禁用，实际：\(binding.action)")
                     failed += 1
                 }
             }
 
-            let presProfile = BuiltInProfiles.makePresentation()
-            expectEqual(presProfile.name, "演示", "演示 Profile 名称")
-            if let binding = presProfile.binding(for: .cross) {
-                if case .keyPress(let code, _) = binding.action {
-                    expectEqual(code, 124, "演示 × 键 = Right Arrow (124)")
+            // Options 键 = exitApp
+            if let binding = starter.binding(for: .options) {
+                if case .exitApp = binding.action {
+                    expect(true, "初始预设 Options 键 = exitApp")
                 } else {
-                    print("  ✗ 演示 × 键不是 keyPress")
+                    print("  ✗ 初始预设 Options 键应 exitApp，实际：\(binding.action)")
                     failed += 1
-                }
-            }
-
-            // OPEN-DECISIONS R-5：PS 键在所有内置 Profile 中都禁用
-            for profile in BuiltInProfiles.makeAll() {
-                if let binding = profile.binding(for: .ps) {
-                    if case .none = binding.action {
-                        expect(true, "\(profile.name) PS 键禁用")
-                    } else {
-                        print("  ✗ \(profile.name) PS 键应该禁用，实际：\(binding.action)")
-                        failed += 1
-                    }
-                }
-            }
-
-            // Options 键在所有内置 Profile 中都是 exitApp
-            for profile in BuiltInProfiles.makeAll() {
-                if let binding = profile.binding(for: .options) {
-                    if case .exitApp = binding.action {
-                        expect(true, "\(profile.name) Options 键 = exitApp")
-                    } else {
-                        print("  ✗ \(profile.name) Options 键应该 exitApp，实际：\(binding.action)")
-                        failed += 1
-                    }
                 }
             }
         }
 
         // =====================================================
-        // Suite 4: ProfileStore
+        // Suite 4: ProfileStore（临时目录，不碰用户真实预设）
         // =====================================================
         suite("ProfileStore") {
-            let store = ProfileStore()
-            let loaded = store.loadAll()
-            // 内置固定 3 套；用户可能另有自定义预设，所以只校验内置数量
-            expectEqual(loaded.filter { $0.isBuiltin }.count, 3, "内置 Profile 有 3 个")
+            let tmpDir = URL(fileURLWithPath: NSTemporaryDirectory())
+                .appendingPathComponent("DS4MateTests-\(UUID().uuidString)", isDirectory: true)
+            let store = ProfileStore(directory: tmpDir)
+            defer { try? FileManager.default.removeItem(at: tmpDir) }
 
-            expectThrows({
-                try store.save(BuiltInProfiles.makeDefault())
-            }, "不能保存内置 Profile")
+            // 空目录 → 自动补一份初始预设，列表不会是空的
+            let initial = store.loadAll()
+            expectEqual(initial.count, 1, "空目录自动生成一份初始预设")
+            expectEqual(initial.first?.name, "默认", "初始预设名称")
 
-            expectThrows({
-                try store.delete(BuiltInProfiles.makeDefault())
-            }, "不能删除内置 Profile")
+            // 再加载一次不会重复生成
+            expectEqual(store.loadAll().count, 1, "初始预设不会重复生成")
 
-            // 保存并加载自定义
+            // 保存并加载自定义预设
             let testID = UUID()
             let custom = Profile(
                 id: testID,
@@ -229,29 +199,39 @@ struct DS4MateTestRunner {
                 try store.save(custom)
                 let reloaded = store.loadAll()
                 let found = reloaded.first(where: { $0.id == testID })
-                expect(found != nil, "保存的自定义 Profile 重新加载成功")
+                expect(found != nil, "保存的预设重新加载成功")
                 if let found = found {
-                    expectEqual(found.name, custom.name, "自定义 Profile 名称一致")
-                    expectEqual(found.bindings.count, 1, "自定义 Profile 绑定数 1")
+                    expectEqual(found.name, custom.name, "预设名称一致")
+                    expectEqual(found.bindings.count, 1, "预设绑定数 1")
                 }
                 try? store.delete(custom)
+                expectEqual(store.loadAll().count, 1, "删除后只剩初始预设")
             } catch {
-                print("  ✗ 保存/加载自定义失败：\(error)")
+                print("  ✗ 保存/加载失败：\(error)")
                 failed += 1
             }
+
+            // isBuiltin 作为历史数据兼容字段保留，仍然拒绝落盘
+            expectThrows({
+                try store.save(Profile(name: "非法内置", isBuiltin: true))
+            }, "不能保存内置标记的 Profile")
         }
 
         // =====================================================
         // Suite 4b: ProfileStore.saveAs
         // =====================================================
         suite("ProfileStore.saveAs") {
-            let store = ProfileStore()
-            let source = BuiltInProfiles.makeDefault()
+            let tmpDir = URL(fileURLWithPath: NSTemporaryDirectory())
+                .appendingPathComponent("DS4MateTests-\(UUID().uuidString)", isDirectory: true)
+            let store = ProfileStore(directory: tmpDir)
+            defer { try? FileManager.default.removeItem(at: tmpDir) }
+
+            let source = ProfileStore.makeStarterProfile()
             let name = "另存测试-\(UUID().uuidString.prefix(8))"
             do {
                 let copy = try store.saveAs(source, name: name)
                 expectEqual(copy.name, name, "另存为名称正确")
-                expect(!copy.isBuiltin, "另存为得到自定义 Profile")
+                expect(!copy.isBuiltin, "另存为得到普通预设")
                 expect(copy.id != source.id, "另存为生成新 ID")
                 expectEqual(copy.bindings.count, source.bindings.count, "另存为绑定数一致")
                 let reloaded = store.loadAll()
@@ -260,35 +240,6 @@ struct DS4MateTestRunner {
             } catch {
                 print("  ✗ saveAs 失败：\(error)")
                 failed += 1
-            }
-        }
-
-        // =====================================================
-        // Suite 5: JSON Resource
-        // =====================================================
-        suite("JSON Resource 文件") {
-            // 找到 build 目录
-            let testExecutableURL = URL(fileURLWithPath: CommandLine.arguments[0])
-            let buildDir = testExecutableURL.deletingLastPathComponent()
-            let resourcesDir = buildDir.appendingPathComponent("DS4Mate.app/Contents/Resources")
-
-            let resourceFiles = ["default", "media", "presentation"]
-            for name in resourceFiles {
-                let jsonURL = resourcesDir.appendingPathComponent("\(name).json")
-                if FileManager.default.fileExists(atPath: jsonURL.path) {
-                    do {
-                        let data = try Data(contentsOf: jsonURL)
-                        let profile = try JSONDecoder().decode(Profile.self, from: data)
-                        expectEqual(profile.isBuiltin, true, "\(name).json isBuiltin=true")
-                        expectEqual(profile.bindings.count, 22, "\(name).json 绑定数 22")
-                        print("    → 名称: \(profile.name), 死区: \(profile.parameters.deadzone)")
-                    } catch {
-                        print("  ✗ \(name).json 解析失败：\(error)")
-                        failed += 1
-                    }
-                } else {
-                    print("  ⚠ \(name).json 不存在（resources 目录可能不完整）")
-                }
             }
         }
 

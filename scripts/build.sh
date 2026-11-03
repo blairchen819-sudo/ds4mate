@@ -43,7 +43,6 @@ xcrun swiftc \
   Sources/DS4Mate/Models/ControllerInput.swift \
   Sources/DS4Mate/Models/Action.swift \
   Sources/DS4Mate/Models/Profile.swift \
-  Sources/DS4Mate/Services/BuiltInProfiles.swift \
   Sources/DS4Mate/Services/ProfileStore.swift \
   Tests/RunTests.swift
 
@@ -51,9 +50,8 @@ xcrun swiftc \
 echo "→ 组装 .app bundle"
 cp build/DS4Mate build/DS4Mate.app/Contents/MacOS/DS4Mate
 cp Sources/DS4Mate/Resources/Info.plist build/DS4Mate.app/Contents/Info.plist
-cp Sources/DS4Mate/Resources/default.json build/DS4Mate.app/Contents/Resources/
-cp Sources/DS4Mate/Resources/media.json build/DS4Mate.app/Contents/Resources/
-cp Sources/DS4Mate/Resources/presentation.json build/DS4Mate.app/Contents/Resources/
+# 预设不再随包内置：全部存放在 ~/Library/Application Support/DS4Mate/profiles/，
+# 首次启动时由 ProfileStore 生成一份初始预设。
 
 # 5. 签名
 # 关键：必须用**固定的签名身份**，不能用 ad-hoc（-）。

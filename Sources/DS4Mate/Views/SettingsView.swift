@@ -7,6 +7,8 @@ struct SettingsView: View {
     @EnvironmentObject var controllerService: ControllerService
     @EnvironmentObject var permissionMonitor: PermissionMonitor
 
+    @State private var showingResetConfirm = false
+
     var body: some View {
         TabView {
             generalTab
@@ -53,12 +55,27 @@ struct SettingsView: View {
                 }
             }
             Section("重置") {
-                Button("恢复内置 3 套预设（删除全部自定义）", role: .destructive) {
-                    appState.resetToBuiltIn()
+                Button("删除全部预设，恢复初始预设", role: .destructive) {
+                    showingResetConfirm = true
                 }
+                Text("会删掉现有全部预设（包括你自己建的），只保留一份初始预设。")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
             }
         }
         .formStyle(.grouped)
+        .confirmationDialog(
+            "删除全部预设？",
+            isPresented: $showingResetConfirm,
+            titleVisibility: .visible
+        ) {
+            Button("删除 \(appState.profiles.count) 份预设", role: .destructive) {
+                appState.resetAllProfiles()
+            }
+            Button("取消", role: .cancel) {}
+        } message: {
+            Text("此操作不可撤销，建议先在 Finder 里备份 Profile 目录。")
+        }
     }
 
     private var permissionsTab: some View {

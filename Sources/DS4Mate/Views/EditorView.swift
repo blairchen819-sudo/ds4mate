@@ -11,6 +11,7 @@ struct EditorView: View {
     @State private var showingActionPicker = false
     @State private var showingSaveAs = false
     @State private var newProfileName = ""
+    @State private var showingResetConfirm = false
 
     var body: some View {
         VStack(spacing: 0) {
@@ -76,6 +77,19 @@ struct EditorView: View {
             if let input = controllerService.lastInput?.input, !input.isAnalog {
                 selectedInput = input
             }
+        }
+        .confirmationDialog(
+            "删除全部预设？",
+            isPresented: $showingResetConfirm,
+            titleVisibility: .visible
+        ) {
+            Button("删除 \(appState.profiles.count) 份预设", role: .destructive) {
+                selectedInput = nil
+                appState.resetAllProfiles()
+            }
+            Button("取消", role: .cancel) {}
+        } message: {
+            Text("会连同你自己创建的预设一起删除，只保留一份初始预设。此操作不可撤销。")
         }
     }
 
@@ -202,11 +216,11 @@ struct EditorView: View {
 
             // 重置
             Button(role: .destructive) {
-                appState.resetToBuiltIn()
+                showingResetConfirm = true
             } label: {
                 Label("重置全部", systemImage: "arrow.uturn.backward")
             }
-            .help("删除所有自定义预设，恢复为内置 3 套")
+            .help("删除全部预设，只保留一份初始预设")
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 10)
