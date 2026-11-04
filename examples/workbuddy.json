@@ -1,0 +1,170 @@
+{
+  "bindings": [
+    {
+      "action": {
+        "type": "scroll"
+      },
+      "input": "leftStickX"
+    },
+    {
+      "action": {
+        "type": "scroll"
+      },
+      "input": "leftStickY"
+    },
+    {
+      "action": {
+        "type": "mouseMoveCursor"
+      },
+      "input": "rightStickX"
+    },
+    {
+      "action": {
+        "type": "mouseMoveCursor"
+      },
+      "input": "rightStickY"
+    },
+    {
+      "action": {
+        "type": "scroll"
+      },
+      "input": "leftTriggerAxis"
+    },
+    {
+      "action": {
+        "type": "mouseRightClick"
+      },
+      "input": "rightTriggerAxis"
+    },
+    {
+      "action": {
+        "keyCode": 51,
+        "modifiers": 0,
+        "type": "keyPress"
+      },
+      "input": "cross"
+    },
+    {
+      "action": {
+        "type": "mouseRightClick"
+      },
+      "input": "circle"
+    },
+    {
+      "action": {
+        "type": "mouseLeftClick"
+      },
+      "input": "square"
+    },
+    {
+      "action": {
+        "keyCode": 36,
+        "modifiers": 0,
+        "type": "keyPress"
+      },
+      "input": "triangle"
+    },
+    {
+      "action": {
+        "keyCode": 33,
+        "modifiers": 1048576,
+        "type": "keyPress"
+      },
+      "input": "l1"
+    },
+    {
+      "action": {
+        "keyCode": 30,
+        "modifiers": 1048576,
+        "type": "keyPress"
+      },
+      "input": "r1"
+    },
+    {
+      "action": {
+        "keyCode": 11,
+        "modifiers": 1179648,
+        "type": "keyPress"
+      },
+      "input": "l3"
+    },
+    {
+      "action": {
+        "type": "mouseLeftClick"
+      },
+      "input": "r3"
+    },
+    {
+      "action": {
+        "keyCode": 126,
+        "modifiers": 0,
+        "type": "keyPress"
+      },
+      "input": "dpadUp"
+    },
+    {
+      "action": {
+        "keyCode": 125,
+        "modifiers": 0,
+        "type": "keyPress"
+      },
+      "input": "dpadDown"
+    },
+    {
+      "action": {
+        "systemShortcut": "previousDesktop",
+        "type": "systemShortcut"
+      },
+      "input": "dpadLeft"
+    },
+    {
+      "action": {
+        "systemShortcut": "nextDesktop",
+        "type": "systemShortcut"
+      },
+      "input": "dpadRight"
+    },
+    {
+      "action": {
+        "type": "none"
+      },
+      "input": "ps"
+    },
+    {
+      "action": {
+        "type": "cycleProfile"
+      },
+      "input": "share"
+    },
+    {
+      "action": {
+        "systemShortcut": "appExpose",
+        "type": "systemShortcut"
+      },
+      "input": "touchpadButton"
+    },
+    {
+      "action": {
+        "modifierKey": "option",
+        "type": "holdModifier"
+      },
+      "input": "options"
+    }
+  ],
+  "id": "57fb2566-e9fa-4bbc-84b7-4e50240995f3",
+  "isBuiltin": false,
+  "name": "workbuddy",
+  "parameters": {
+    "buttonSwapXY": false,
+    "cursorSensitivity": 1,
+    "deadzone": 0.05,
+    "fineScrollSensitivity": 0.3,
+    "invertLeftStickX": false,
+    "invertLeftStickY": false,
+    "invertRightStickX": false,
+    "invertRightStickY": false,
+    "scrollSensitivity": 1,
+    "triggerThreshold": 0.35
+  },
+  "version": 1
+}
