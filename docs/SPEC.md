@@ -376,7 +376,7 @@ struct AppRuntimeState: Codable {
 
 ```bash
 # 1. 拉取源码
-git clone https://github.com/ericmr1981/ds4mate.git
+git clone https://github.com/blairchen819-sudo/ds4mate.git
 cd ds4mate
 
 # 2. 用 Xcode 15 打开

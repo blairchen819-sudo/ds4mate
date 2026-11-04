@@ -1,8 +1,11 @@
 # DS4Mate
 
-> 把 PS4 DualShock 4 手柄变成 Mac 的鼠标/键盘遥控器，原生 SwiftUI 菜单栏 App。
+> **Use a PS4 DualShock 4 as a mouse, keyboard and shortcut remote on macOS.**
+> Native SwiftUI menu bar app with visual button mapping and swappable profiles.
+>
+> 把 PS4 DualShock 4 手柄变成 Mac 的鼠标 / 键盘 / 快捷键遥控器，原生 SwiftUI 菜单栏 App。
 
-**状态**：v1.0 MVP 已完成，90/90 冒烟测试通过，可启动运行。
+**状态**：v1.0 MVP 已完成，83/83 冒烟测试通过，可启动运行。
 
 > **说明**：DS4Mate 是带图形界面的 macOS **菜单栏 App**（`@main App` + `MenuBarExtra`，打包为 `.app` 运行），**不是命令行 / 终端程序**，没有 CLI 参数或终端交互界面。
 
@@ -36,7 +39,7 @@ open build/DS4Mate.app
 ./build/DS4MateTests
 ```
 
-期望输出：`通过：95 / 失败：0`
+期望输出：`通过：83 / 失败：0`
 
 ---
 
@@ -82,19 +85,19 @@ ds4mate/
 │   ├── research/PRD-v0.1.md       # PM 调研
 │   ├── design-tokens.json         # W3C 标准设计 Token
 │   ├── design-system/             # 6 个页面范式
-│   ├── decisions/                 # 7 个 ADR + JSON Schema
+│   ├── decisions/                 # 9 个 ADR + JSON Schema
 │   └── adr-index.md
 ├── Sources/DS4Mate/
 │   ├── App/                       # @main + AppState
 │   ├── Models/                    # 数据模型
 │   ├── Services/                  # ControllerService / EventSynthesizer 等
 │   ├── Views/                     # SwiftUI 视图
-│   └── Resources/                 # Info.plist + 3 个 JSON Profile
-├── Tests/RunTests.swift           # 90 个冒烟测试
+│   └── Resources/                 # Info.plist
+├── Tests/RunTests.swift           # 83 个冒烟测试
 ├── scripts/build.sh               # 一键构建脚本
 ├── Package.swift                  # SwiftPM 定义
 └── build/                         # 编译产物
-    ├── DS4Mate                    # 独立可执行（1MB）
+    ├── DS4Mate                    # 独立可执行（约 1.8MB）
     ├── DS4Mate.app                # .app bundle（可双击运行）
     └── DS4MateTests               # 测试可执行
 ```
