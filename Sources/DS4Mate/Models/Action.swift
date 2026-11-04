@@ -17,17 +17,17 @@ public enum SystemShortcut: String, Codable, CaseIterable, Hashable, Sendable {
 
     public var displayName: String {
         switch self {
-        case .previousDesktop: return "上一个桌面"
-        case .nextDesktop: return "下一个桌面"
-        case .showDesktop: return "显示桌面"
-        case .missionControl: return "调度中心"
-        case .appExpose: return "App Exposé"
-        case .launchpad: return "Launchpad"
-        case .screenshotFull: return "全屏截图"
-        case .screenshotSelection: return "区域截图"
-        case .lockScreen: return "锁屏"
-        case .browserBack: return "浏览器后退"
-        case .browserForward: return "浏览器前进"
+        case .previousDesktop: return L("system.previousDesktop")
+        case .nextDesktop: return L("system.nextDesktop")
+        case .showDesktop: return L("system.showDesktop")
+        case .missionControl: return L("system.missionControl")
+        case .appExpose: return L("system.appExpose")
+        case .launchpad: return L("system.launchpad")
+        case .screenshotFull: return L("system.screenshotFull")
+        case .screenshotSelection: return L("system.screenshotSelection")
+        case .lockScreen: return L("system.lockScreen")
+        case .browserBack: return L("system.browserBack")
+        case .browserForward: return L("system.browserForward")
         }
     }
 
@@ -59,12 +59,12 @@ public enum MediaAction: String, Codable, CaseIterable, Hashable, Sendable {
 
     public var displayName: String {
         switch self {
-        case .playPause: return "播放 / 暂停"
-        case .next: return "下一曲"
-        case .previous: return "上一曲"
-        case .volumeUp: return "音量增大"
-        case .volumeDown: return "音量减小"
-        case .mute: return "静音"
+        case .playPause: return L("media.playPause")
+        case .next: return L("media.next")
+        case .previous: return L("media.previous")
+        case .volumeUp: return L("media.volumeUp")
+        case .volumeDown: return L("media.volumeDown")
+        case .mute: return L("media.mute")
         }
     }
 }
@@ -219,7 +219,7 @@ public enum Action: Codable, Hashable, Sendable {
         case 116: return "Page Up ⇞"
         case 119: return "End ↘"
         case 121: return "Page Down ⇟"
-        default: return "键码 \(keyCode)"
+        default: return L("action.keyCode", keyCode)
         }
     }
 
@@ -259,15 +259,15 @@ public enum Action: Codable, Hashable, Sendable {
 
     public var displayName: String {
         switch self {
-        case .none: return "禁用"
-        case .mouseLeftClick: return "鼠标左键"
-        case .mouseRightClick: return "鼠标右键"
-        case .mouseMiddleClick: return "鼠标中键"
-        case .mouseDoubleClick: return "鼠标双击"
-        case .mouseDragToggle: return "切换拖拽模式"
-        case .mouseMoveCursor: return "鼠标移动（持续）"
-        case .scroll: return "滚轮（持续）"
-        case .fineScroll: return "精细滚轮"
+        case .none: return L("action.none")
+        case .mouseLeftClick: return L("action.mouseLeftClick")
+        case .mouseRightClick: return L("action.mouseRightClick")
+        case .mouseMiddleClick: return L("action.mouseMiddleClick")
+        case .mouseDoubleClick: return L("action.mouseDoubleClick")
+        case .mouseDragToggle: return L("action.mouseDragToggle")
+        case .mouseMoveCursor: return L("action.mouseMoveCursor")
+        case .scroll: return L("action.scroll")
+        case .fineScroll: return L("action.fineScroll")
         case .keyPress(let code, let mods):
             let m = Self.modifierString(mods)
             return m.isEmpty ? Self.keyName(for: code) : "\(m)\(Self.keyName(for: code))"
@@ -276,15 +276,15 @@ public enum Action: Codable, Hashable, Sendable {
             let keys = codes.map { Self.keyName(for: $0) }.joined(separator: "+")
             return m.isEmpty ? keys : "\(m)\(keys)"
         case .holdModifier(let key):
-            return "按住 \(key.displayName)"
+            return L("action.holdModifier", key.displayName)
         case .systemShortcut(let s): return s.displayName
         case .mediaKey(let m): return m.displayName
-        case .exitApp: return "退出 DS4Mate"
-        case .toggleAppEnabled: return "切换总开关"
-        case .cycleProfile: return "循环切换预设"
-        case .openMainWindow: return "打开主窗口"
-        case .toggleQwenVoice: return "切换千问语音"
-        case .toggleQwenMic: return "切换千问麦克风"
+        case .exitApp: return L("action.exitApp")
+        case .toggleAppEnabled: return L("action.toggleAppEnabled")
+        case .cycleProfile: return L("action.cycleProfile")
+        case .openMainWindow: return L("action.openMainWindow")
+        case .toggleQwenVoice: return L("action.toggleQwenVoice")
+        case .toggleQwenMic: return L("action.toggleQwenMic")
         }
     }
 
@@ -293,51 +293,53 @@ public enum Action: Codable, Hashable, Sendable {
     public var functionDescription: String {
         switch self {
         case .none:
-            return "该键被禁用，按下不会有任何反应"
+            return L("action.none.desc")
         case .mouseLeftClick:
-            return "模拟一次鼠标左键单击（按下 + 抬起）"
+            return L("action.mouseLeftClick.desc")
         case .mouseRightClick:
-            return "模拟一次鼠标右键单击，弹出右键菜单"
+            return L("action.mouseRightClick.desc")
         case .mouseMiddleClick:
-            return "模拟一次鼠标中键单击"
+            return L("action.mouseMiddleClick.desc")
         case .mouseDoubleClick:
-            return "模拟一次鼠标左键双击"
+            return L("action.mouseDoubleClick.desc")
         case .mouseDragToggle:
-            return "按一次按住左键进入拖拽，再按一次松开"
+            return L("action.mouseDragToggle.desc")
         case .mouseMoveCursor:
-            return "按住期间按摇杆方向持续移动鼠标指针"
+            return L("action.mouseMoveCursor.desc")
         case .scroll:
-            return "按住期间按摇杆方向持续滚动"
+            return L("action.scroll.desc")
         case .fineScroll:
-            return "扳机行程越深滚动越快（精细档位）"
+            return L("action.fineScroll.desc")
         case .keyPress(let code, let modifiers):
             let combo = Self.modifierString(modifiers)
             let key = Self.keyName(for: code)
-            return combo.isEmpty ? "敲击一次 \(key)" : "发送快捷键 \(combo)\(key)"
+            return combo.isEmpty
+                ? L("action.keyPress.desc", key)
+                : L("action.keyPress.combo.desc", combo, key)
         case .keyChord(let codes, let modifiers):
             let combo = Self.modifierString(modifiers)
             let keys = codes.map { Self.keyName(for: $0) }.joined(separator: " + ")
             return combo.isEmpty
-                ? "依次敲击 \(keys)"
-                : "按住 \(combo) 并依次敲击 \(keys)"
+                ? L("action.keyChord.desc", keys)
+                : L("action.keyChord.combo.desc", combo, keys)
         case .holdModifier(let key):
-            return "手柄按住期间保持 \(key.displayName) 按下，松开即释放，可与其他动作组合"
+            return L("action.holdModifier.desc", key.displayName)
         case .systemShortcut(let shortcut):
-            return "触发系统快捷键 \(shortcut.keyCombo) —— \(shortcut.displayName)"
+            return L("action.systemShortcut.desc", shortcut.keyCombo, shortcut.displayName)
         case .mediaKey(let media):
-            return "媒体控制：\(media.displayName)"
+            return L("action.mediaKey.desc", media.displayName)
         case .exitApp:
-            return "退出 DS4Mate，手柄映射随之停止"
+            return L("action.exitApp.desc")
         case .toggleAppEnabled:
-            return "临时开关手柄映射，不退出应用"
+            return L("action.toggleAppEnabled.desc")
         case .cycleProfile:
-            return "切换到下一套预设，与设置里的全局切换键等效"
+            return L("action.cycleProfile.desc")
         case .openMainWindow:
-            return "弹出键位编辑器主窗口"
+            return L("action.openMainWindow.desc")
         case .toggleQwenVoice:
-            return "通过辅助功能接口点击千问客户端的语音通话按钮"
+            return L("action.toggleQwenVoice.desc")
         case .toggleQwenMic:
-            return "通过辅助功能接口点击千问客户端的麦克风按钮"
+            return L("action.toggleQwenMic.desc")
         }
     }
 
@@ -412,6 +414,7 @@ public enum Action: Codable, Hashable, Sendable {
     }
 
     /// 动作分类（用于动作选择器的左侧分类）
+    /// `rawValue` 保留原样作为稳定标识，界面一律显示 `displayName`。
     public enum Category: String, CaseIterable, Hashable {
         case mouse = "鼠标"
         case keyboard = "键盘"
@@ -420,6 +423,19 @@ public enum Action: Codable, Hashable, Sendable {
         case system = "系统"
         case media = "媒体"
         case meta = "元动作"
+
+        /// 分类的界面名称（随语言变化）
+        public var displayName: String {
+            switch self {
+            case .mouse: return L("category.mouse")
+            case .keyboard: return L("category.keyboard")
+            case .workbuddy: return L("category.workbuddy")
+            case .orca: return L("category.orca")
+            case .system: return L("category.system")
+            case .media: return L("category.media")
+            case .meta: return L("category.meta")
+            }
+        }
 
         /// 分类对应的 SF Symbol（选择器侧栏与详情面板共用）
         public var iconName: String {

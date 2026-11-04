@@ -6,6 +6,7 @@ struct EditorView: View {
     @EnvironmentObject var appState: AppState
     @EnvironmentObject var controllerService: ControllerService
     @EnvironmentObject var permissionMonitor: PermissionMonitor
+    @ObservedObject private var i18n = Localization.shared
 
     @State private var selectedInput: ControllerInput? = nil
     @State private var showingActionPicker = false
@@ -82,40 +83,40 @@ struct EditorView: View {
             }
         }
         .confirmationDialog(
-            "删除全部预设？",
+            i18n.t("editor.reset.title"),
             isPresented: $showingResetConfirm,
             titleVisibility: .visible
         ) {
-            Button("删除 \(appState.profiles.count) 份预设", role: .destructive) {
+            Button(i18n.t("editor.reset.confirm", appState.profiles.count), role: .destructive) {
                 selectedInput = nil
                 appState.resetAllProfiles()
             }
-            Button("取消", role: .cancel) {}
+            Button(i18n.t("common.cancel"), role: .cancel) {}
         } message: {
-            Text("会连同你自己创建的预设一起删除，只保留一份初始预设。此操作不可撤销。")
+            Text(i18n.t("editor.reset.message"))
         }
         .confirmationDialog(
-            "删除预设「\(pendingDeleteProfile?.name ?? "")」？",
+            i18n.t("editor.delete.title", pendingDeleteProfile?.name ?? ""),
             isPresented: $showingDeleteConfirm,
             titleVisibility: .visible
         ) {
-            Button("删除", role: .destructive) {
+            Button(i18n.t("common.delete"), role: .destructive) {
                 guard let target = pendingDeleteProfile else { return }
                 if !appState.deleteProfile(target.id) {
-                    deleteFailedMessage = "删除失败：文件可能被占用，或这是最后一份预设。"
+                    deleteFailedMessage = i18n.t("editor.delete.failed.body")
                 }
                 pendingDeleteProfile = nil
                 selectedInput = nil
             }
-            Button("取消", role: .cancel) { pendingDeleteProfile = nil }
+            Button(i18n.t("common.cancel"), role: .cancel) { pendingDeleteProfile = nil }
         } message: {
-            Text("预设文件会从磁盘移除，此操作不可撤销。")
+            Text(i18n.t("editor.delete.message"))
         }
-        .alert("无法删除预设", isPresented: Binding(
+        .alert(i18n.t("editor.delete.failed.title"), isPresented: Binding(
             get: { deleteFailedMessage != nil },
             set: { if !$0 { deleteFailedMessage = nil } }
         )) {
-            Button("好", role: .cancel) { deleteFailedMessage = nil }
+            Button(i18n.t("common.ok"), role: .cancel) { deleteFailedMessage = nil }
         } message: {
             Text(deleteFailedMessage ?? "")
         }
@@ -132,18 +133,18 @@ struct EditorView: View {
                 .frame(width: 7, height: 7)
 
             if let last = controllerService.lastInput {
-                Text("最近输入：\(last.input.displayName)")
+                Text(i18n.t("editor.live.lastInput", last.input.displayName))
                     .font(.callout.weight(.semibold))
                     .foregroundStyle(.green)
                 Text(last.at, style: .relative)
                     .font(.caption)
                     .foregroundStyle(.secondary)
             } else if connected {
-                Text("按一下手柄上任意键，这里会显示按键名")
+                Text(i18n.t("editor.live.hint"))
                     .font(.callout)
                     .foregroundStyle(.secondary)
             } else {
-                Text("手柄未连接 —— 按手柄中间的 PS 键唤醒（× 唤不醒）")
+                Text(i18n.t("editor.live.disconnected"))
                     .font(.callout.weight(.medium))
                     .foregroundStyle(.orange)
             }
@@ -151,13 +152,13 @@ struct EditorView: View {
             Spacer()
 
             if !connected {
-                Button("重连手柄") {
+                Button(i18n.t("editor.live.reconnect")) {
                     controllerService.reconnectController()
                 }
                 .controlSize(.small)
             }
 
-            Text("HID 报告 \(controllerService.hidReportCount)")
+            Text(i18n.t("editor.live.hid", controllerService.hidReportCount))
                 .font(.caption.monospacedDigit())
                 .foregroundStyle(controllerService.hidReportCount > 0 ? .green : .secondary)
             Text(controllerService.hidStatus)
@@ -176,20 +177,20 @@ struct EditorView: View {
             Image(systemName: "exclamationmark.triangle.fill")
                 .foregroundStyle(.orange)
             VStack(alignment: .leading, spacing: 2) {
-                Text("未授权辅助功能")
+                Text(i18n.t("editor.permission.title"))
                     .font(.callout)
-                Text("如果系统设置里已有 DS4Mate，先移除再重新添加（签名 hash 变了）")
+                Text(i18n.t("editor.permission.body"))
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
             Spacer()
-            Button("打开系统设置") {
+            Button(i18n.t("common.openSystemSettings")) {
                 permissionMonitor.openAccessibilitySettings()
             }
-            Button("在 Finder 中显示") {
+            Button(i18n.t("common.revealInFinder")) {
                 permissionMonitor.revealAppInFinder()
             }
-            Button("重新检测") {
+            Button(i18n.t("common.recheck")) {
                 permissionMonitor.refresh()
             }
         }
@@ -200,7 +201,7 @@ struct EditorView: View {
     private var toolbar: some View {
         HStack(spacing: 12) {
             // Profile 选择
-            Picker("预设", selection: Binding(
+            Picker(i18n.t("editor.toolbar.profiles"), selection: Binding(
                 get: { appState.selectedProfileID ?? appState.profiles.first?.id ?? UUID() },
                 set: { appState.selectProfile($0) }
             )) {
@@ -229,36 +230,39 @@ struct EditorView: View {
             Button {
                 appState.cycleToNextProfile()
             } label: {
-                Label("下一个预设", systemImage: "arrow.triangle.2.circlepath")
+                Label(i18n.t("editor.toolbar.next"), systemImage: "arrow.triangle.2.circlepath")
             }
-            .help("切换到下一套预设")
+            .help(i18n.t("editor.toolbar.next.help"))
 
             // 另存为新的命名预设
             Button {
-                newProfileName = "\(appState.activeProfile?.name ?? "预设") 副本"
+                newProfileName = i18n.t("editor.saveas.defaultName",
+                                        appState.activeProfile?.name ?? i18n.t("common.profile"))
                 showingSaveAs = true
             } label: {
-                Label("另存为…", systemImage: "square.and.arrow.down.on.square")
+                Label(i18n.t("editor.toolbar.saveAs"), systemImage: "square.and.arrow.down.on.square")
             }
-            .help("把当前预设的键位另存为一个新名字，之后可独立修改")
+            .help(i18n.t("editor.toolbar.saveAs.help"))
 
             // 删除当前预设
             Button(role: .destructive) {
                 pendingDeleteProfile = appState.activeProfile
                 showingDeleteConfirm = true
             } label: {
-                Label("删除预设", systemImage: "trash")
+                Label(i18n.t("editor.toolbar.delete"), systemImage: "trash")
             }
             .disabled(appState.profiles.count <= 1)
-            .help(appState.profiles.count <= 1 ? "至少要保留一份预设" : "删除当前预设（不可撤销）")
+            .help(appState.profiles.count <= 1
+                  ? i18n.t("menubar.delete.keepOne")
+                  : i18n.t("editor.toolbar.delete.help"))
 
             // 重置
             Button(role: .destructive) {
                 showingResetConfirm = true
             } label: {
-                Label("重置全部", systemImage: "arrow.uturn.backward")
+                Label(i18n.t("editor.toolbar.reset"), systemImage: "arrow.uturn.backward")
             }
-            .help("删除全部预设，只保留一份初始预设")
+            .help(i18n.t("editor.toolbar.reset.help"))
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 10)
@@ -266,23 +270,23 @@ struct EditorView: View {
 
     private var saveAsSheet: some View {
         VStack(alignment: .leading, spacing: 16) {
-            Text("另存为新预设")
+            Text(i18n.t("editor.saveas.title"))
                 .font(.headline)
-            Text("会把当前「\(appState.activeProfile?.name ?? "未选择")」的键位和参数复制一份，之后两套互不影响。")
+            Text(i18n.t("editor.saveas.body", appState.activeProfile?.name ?? i18n.t("common.profile")))
                 .font(.caption)
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
 
-            TextField("预设名称", text: $newProfileName)
+            TextField(i18n.t("editor.saveas.placeholder"), text: $newProfileName)
                 .textFieldStyle(.roundedBorder)
                 .onSubmit { commitSaveAs() }
 
             HStack {
                 Spacer()
-                Button("取消") {
+                Button(i18n.t("common.cancel")) {
                     showingSaveAs = false
                 }
-                Button("保存") {
+                Button(i18n.t("common.save")) {
                     commitSaveAs()
                 }
                 .buttonStyle(.borderedProminent)
@@ -312,8 +316,8 @@ struct EditorView: View {
     private var connectionTitle: String {
         switch controllerService.connectionState {
         case .connected(let name): return name
-        case .connecting: return "连接中…"
-        case .disconnected: return "手柄未连接"
+        case .connecting: return i18n.t("common.connecting")
+        case .disconnected: return i18n.t("editor.disconnected")
         }
     }
 
@@ -344,7 +348,7 @@ struct EditorView: View {
                     HStack(alignment: .top, spacing: 6) {
                         Image(systemName: "exclamationmark.triangle.fill")
                             .foregroundStyle(.orange)
-                        Text("这个键已被设为「全局预设切换键」，按下会切换预设，下面的绑定不会触发。")
+                        Text(i18n.t("editor.detail.switchKey.warning"))
                             .font(.caption)
                             .fixedSize(horizontal: false, vertical: true)
                     }
@@ -356,7 +360,7 @@ struct EditorView: View {
 
                 // 当前绑定 + 它对应的快捷功能
                 VStack(alignment: .leading, spacing: 8) {
-                    Text("当前绑定")
+                    Text(i18n.t("editor.detail.currentBinding"))
                         .font(.caption)
                         .foregroundStyle(.secondary)
 
@@ -368,7 +372,7 @@ struct EditorView: View {
                         VStack(alignment: .leading, spacing: 2) {
                             Text(action.displayName)
                                 .font(.title3.weight(.medium))
-                            Text(action.category.rawValue)
+                            Text(action.category.displayName)
                                 .font(.caption2)
                                 .foregroundStyle(.secondary)
                         }
@@ -393,7 +397,7 @@ struct EditorView: View {
                 // （Orca 预设就显示「Orca · 跳转文件」，而不是只丢一个 ⌘P）
                 if !appSemantics.isEmpty {
                     VStack(alignment: .leading, spacing: 8) {
-                        Text("在程序里的功能")
+                        Text(i18n.t("editor.detail.appFunctions"))
                             .font(.caption)
                             .foregroundStyle(.secondary)
 
@@ -422,27 +426,27 @@ struct EditorView: View {
                 Button {
                     showingActionPicker = true
                 } label: {
-                    Label("编辑", systemImage: "pencil")
+                    Label(i18n.t("editor.detail.edit"), systemImage: "pencil")
                         .frame(maxWidth: .infinity)
                 }
                 .buttonStyle(.borderedProminent)
                 .controlSize(.large)
-                .help("打开动作选择器，给这个键换一个绑定")
+                .help(i18n.t("editor.detail.edit.help"))
 
                 Button {
                     if let profile = appState.activeProfile {
                         appState.updateBinding(in: profile.id, input: input, action: .none)
                     }
                 } label: {
-                    Label("设为禁用", systemImage: "minus.circle")
+                    Label(i18n.t("editor.detail.disable"), systemImage: "minus.circle")
                         .frame(maxWidth: .infinity)
                 }
                 .disabled(action == Action.none)
-                .help("保留这个键，但不触发任何动作")
+                .help(i18n.t("editor.detail.disable.help"))
 
                 Spacer(minLength: 0)
 
-                Text("改动会立即保存到「\(appState.activeProfile?.name ?? "当前预设")」")
+                Text(i18n.t("editor.detail.saved", appState.activeProfile?.name ?? i18n.t("common.profile")))
                     .font(.caption2)
                     .foregroundStyle(.secondary)
             }
@@ -457,9 +461,9 @@ struct EditorView: View {
             Image(systemName: "hand.point.up.left")
                 .imageScale(.large)
                 .foregroundStyle(.secondary)
-            Text("点击手柄上的任一按键")
+            Text(i18n.t("editor.placeholder.title"))
                 .font(.headline)
-            Text("右侧会显示它当前绑定的动作和对应功能；\n确认要改再点「编辑」进入动作选择器。")
+            Text(i18n.t("editor.placeholder.body"))
                 .font(.caption)
                 .foregroundStyle(.secondary)
                 .multilineTextAlignment(.center)

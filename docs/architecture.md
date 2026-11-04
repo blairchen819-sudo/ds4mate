@@ -214,6 +214,25 @@
 
 **选定 A**：纯单元 + 视图测试 + 手工 e2e（因为测试 CGEvent post 无法 e2e 自动化，需要真机鼠标交互）。
 
+### 4.8 本地化与首次启动
+
+| 选项 | 切换是否即时生效 | 构建改动 | 缺词条时的表现 | 评分 | 决定 |
+|------|-----------------|---------|---------------|------|------|
+| A. `.lproj` + `Localizable.strings`（系统标准方案） | ❌ 需重启进程（bundle 缓存 locale） | 需在 `build.sh` 里多拷一层资源目录 | 回落到 `key` 原文 | ★★★ | — |
+| **B. 运行时双语词典（Swift 字典 + `ObservableObject`）** | ✅ 点一下立刻变 | 无（纯代码） | 回落另一种语言 | ★★★★★ | ✅ 选定 |
+| C. 第三方库（如 SwiftGen / Lokalise SDK） | 多数仍需重启 | 引入依赖 | — | ★★ | — |
+
+**选定 B**：这个 App 由 `scripts/build.sh` 手工组装 bundle、无 Xcode 工程，方案 A 需要额外维护资源目录与 locale 解析；更关键的是「设置里点一下就换语言」是明确的产品要求，而 A 必须重启进程。代价是词条表要自己维护，用 `scripts/check-i18n.py` 在构建期做一致性门禁（中英 key 集合相等、占位符相等、无空值、无孤儿引用）。
+
+约定：
+
+- 视图持有 `@ObservedObject private var i18n = Localization.shared`，语言变化时 SwiftUI 自然重算，不依赖环境注入；
+- 模型层（`Action` / `ControllerInput` / `ShortcutCatalog`）只存语义或本地化 key，取显示名时现算——不把译文写进数据；
+- HID 层状态存 `statusKey + args` 而非成品文案，切换语言后状态行同步刷新；
+- 窗口标题这类不经过 `@ObservedObject` 的文案，由 `AppState` 转发 `Localization.objectWillChange` 触发重算。
+
+首次启动的弹窗路径（`FirstRunCoordinator`）：App 是 `LSUIElement`，启动时没有任何窗口，`openWindow(id:)` 又只能在已有视图的 environment 里调用，因此用 AppKit `NSWindow` + `NSHostingController` 直接托管 SwiftUI 视图。顺序为「无语言偏好 → 语言选择窗口 → 未完成引导 → 4 步引导」。
+
 ---
 
 ## 5. 系统权限模型

@@ -7,6 +7,7 @@ struct ActionPickerView: View {
     let onSelect: (Action) -> Void
     let onCancel: () -> Void
 
+    @ObservedObject private var i18n = Localization.shared
     @State private var searchText = ""
     @State private var selectedCategory: Action.Category = .mouse
 
@@ -34,10 +35,10 @@ struct ActionPickerView: View {
         VStack(spacing: 0) {
             // 标题
             HStack {
-                Text("为「\(input.displayName)」选择动作")
+                Text(i18n.t("picker.title", input.displayName))
                     .font(.headline)
                 Spacer()
-                Button("取消", action: onCancel)
+                Button(i18n.t("common.cancel"), action: onCancel)
             }
             .padding()
 
@@ -47,7 +48,7 @@ struct ActionPickerView: View {
             HStack {
                 Image(systemName: "magnifyingglass")
                     .foregroundStyle(.secondary)
-                TextField("搜索动作…", text: $searchText)
+                TextField(i18n.t("picker.search"), text: $searchText)
                     .textFieldStyle(.plain)
             }
             .padding(8)
@@ -64,7 +65,7 @@ struct ActionPickerView: View {
                         } label: {
                             HStack {
                                 Image(systemName: category.iconName)
-                                Text(category.rawValue)
+                                Text(category.displayName)
                                 Spacer()
                             }
                             .padding(.horizontal, 12)

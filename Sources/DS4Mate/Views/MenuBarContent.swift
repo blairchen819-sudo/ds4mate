@@ -7,6 +7,7 @@ struct MenuBarContent: View {
     @EnvironmentObject var controllerService: ControllerService
     @EnvironmentObject var permissionMonitor: PermissionMonitor
     @Environment(\.openWindow) private var openWindow
+    @ObservedObject private var i18n = Localization.shared
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -17,7 +18,7 @@ struct MenuBarContent: View {
 
             // Profile 切换
             HStack {
-                Text("预设")
+                Text(i18n.t("menubar.profiles"))
                     .font(.caption)
                     .foregroundStyle(.secondary)
                 Spacer()
@@ -27,7 +28,7 @@ struct MenuBarContent: View {
                     Image(systemName: "arrow.triangle.2.circlepath")
                 }
                 .buttonStyle(.borderless)
-                .help("切换到下一个预设")
+                .help(i18n.t("menubar.cycle.help"))
             }
             .padding(.horizontal, 12)
             .padding(.top, 8)
@@ -43,7 +44,7 @@ struct MenuBarContent: View {
                 get: { controllerService.isEnabled },
                 set: { controllerService.isEnabled = $0 }
             )) {
-                Label("映射已启用", systemImage: "switch.2")
+                Label(i18n.t("menubar.mapping.toggle"), systemImage: "switch.2")
             }
             .toggleStyle(.switch)
             .padding(.horizontal, 12)
@@ -54,7 +55,7 @@ struct MenuBarContent: View {
                 openWindow(id: "main")
                 NSApp.activate(ignoringOtherApps: true)
             }) {
-                Label("打开键位编辑器", systemImage: "rectangle.grid.2x2")
+                Label(i18n.t("menubar.openEditor"), systemImage: "rectangle.grid.2x2")
             }
             .buttonStyle(.plain)
             .padding(.horizontal, 12)
@@ -64,7 +65,7 @@ struct MenuBarContent: View {
             Button(action: {
                 openSettingsWindow()
             }) {
-                Label("设置…", systemImage: "gearshape")
+                Label(i18n.t("menubar.settings"), systemImage: "gearshape")
             }
             .buttonStyle(.plain)
             .padding(.horizontal, 12)
@@ -79,7 +80,7 @@ struct MenuBarContent: View {
 
             // 退出
             Button(action: { NSApp.terminate(nil) }) {
-                Label("退出 DS4Mate", systemImage: "power")
+                Label(i18n.t("menubar.quit"), systemImage: "power")
             }
             .buttonStyle(.plain)
             .padding(.horizontal, 12)
@@ -97,27 +98,28 @@ struct MenuBarContent: View {
                 Text(connectionTitle)
                     .font(.headline)
                 if let profile = appState.activeProfile {
-                    Text("当前预设：\(profile.name)")
+                    Text(i18n.t("menubar.activeProfile", profile.name))
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
                 if let last = controllerService.lastInput {
-                    Text("最近输入：\(last.input.displayName) · \(timeAgo(last.at))")
+                    Text(i18n.t("menubar.lastInput", last.input.displayName, timeAgo(last.at)))
                         .font(.caption2)
                         .foregroundStyle(.green)
                 } else {
-                    Text("最近输入：等待手柄按键…")
+                    Text(i18n.t("menubar.lastInput.waiting"))
                         .font(.caption2)
                         .foregroundStyle(.tertiary)
                 }
-                Text("HID 报告 \(controllerService.hidReportCount) · \(controllerService.hidStatus)")
+                Text(i18n.t("menubar.hid", controllerService.hidReportCount, controllerService.hidStatus))
                     .font(.caption2)
                     .foregroundStyle(.secondary)
                     .lineLimit(1)
                 if case .disconnected = controllerService.connectionState {
-                    Text("按手柄中间的 PS 键唤醒（× 唤不醒）")
+                    Text(i18n.t("menubar.wake"))
                         .font(.caption2)
                         .foregroundStyle(.orange)
+                        .fixedSize(horizontal: false, vertical: true)
                 }
                 // 手柄连上了但一个数据包都收不到 = 缺「输入监控」权限，光有辅助功能不够
                 if !isDisconnected, controllerService.hidReportCount == 0 {
@@ -132,7 +134,7 @@ struct MenuBarContent: View {
                     Image(systemName: "arrow.clockwise")
                 }
                 .buttonStyle(.borderless)
-                .help("尝试重新连接手柄")
+                .help(i18n.t("menubar.reconnect.help"))
             }
         }
         .padding(.horizontal, 12)
@@ -141,9 +143,9 @@ struct MenuBarContent: View {
 
     private func timeAgo(_ date: Date) -> String {
         let seconds = Int(Date().timeIntervalSince(date))
-        if seconds < 1 { return "刚刚" }
-        if seconds < 60 { return "\(seconds)秒前" }
-        return "\(seconds / 60)分前"
+        if seconds < 1 { return i18n.t("menubar.time.justNow") }
+        if seconds < 60 { return i18n.t("menubar.time.seconds", seconds) }
+        return i18n.t("menubar.time.minutes", seconds / 60)
     }
 
     private var isDisconnected: Bool {
@@ -155,11 +157,11 @@ struct MenuBarContent: View {
     /// 这跟「辅助功能」是两项独立权限，只给辅助功能只能控制别的 App，收不到手柄。
     private var inputMonitoringWarning: some View {
         VStack(alignment: .leading, spacing: 3) {
-            Text("⚠️ 收不到手柄数据")
+            Text(i18n.t("menubar.inputMonitoring.title"))
                 .font(.caption2)
                 .foregroundStyle(.orange)
                 .bold()
-            Text("请在「系统设置 → 隐私与安全性 → 输入监控」里勾选 DS4Mate")
+            Text(i18n.t("menubar.inputMonitoring.body"))
                 .font(.caption2)
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
@@ -168,7 +170,7 @@ struct MenuBarContent: View {
                     NSWorkspace.shared.open(url)
                 }
             } label: {
-                Text("打开输入监控设置")
+                Text(i18n.t("menubar.inputMonitoring.button"))
                     .font(.caption2)
             }
             .buttonStyle(.link)
@@ -195,8 +197,8 @@ struct MenuBarContent: View {
     private var connectionTitle: String {
         switch controllerService.connectionState {
         case .connected(let name): return name
-        case .connecting: return "连接中…"
-        case .disconnected: return "未连接手柄"
+        case .connecting: return i18n.t("common.connecting")
+        case .disconnected: return i18n.t("menubar.disconnected")
         }
     }
 
@@ -226,12 +228,14 @@ struct MenuBarContent: View {
             .foregroundStyle(.secondary)
             .disabled(appState.profiles.count <= 1)
             .opacity(appState.profiles.count <= 1 ? 0.25 : 0.55)
-            .help(appState.profiles.count <= 1 ? "至少要保留一份预设" : "删除「\(profile.name)」")
+            .help(appState.profiles.count <= 1
+                  ? i18n.t("menubar.delete.keepOne")
+                  : i18n.t("menubar.delete.help", profile.name))
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 4)
         .contextMenu {
-            Button("删除预设…") { confirmDelete(profile) }
+            Button(i18n.t("menubar.delete.menu")) { confirmDelete(profile) }
                 .disabled(appState.profiles.count <= 1)
         }
     }
@@ -242,19 +246,19 @@ struct MenuBarContent: View {
         NSApp.activate(ignoringOtherApps: true)
 
         let alert = NSAlert()
-        alert.messageText = "删除预设「\(profile.name)」？"
-        alert.informativeText = "预设文件会从磁盘移除，此操作不可撤销。"
+        alert.messageText = i18n.t("menubar.delete.title", profile.name)
+        alert.informativeText = i18n.t("menubar.delete.body")
         alert.alertStyle = .warning
-        alert.addButton(withTitle: "删除")
-        alert.addButton(withTitle: "取消")
+        alert.addButton(withTitle: i18n.t("common.delete"))
+        alert.addButton(withTitle: i18n.t("common.cancel"))
         guard alert.runModal() == .alertFirstButtonReturn else { return }
 
         if !appState.deleteProfile(profile.id) {
             let failure = NSAlert()
-            failure.messageText = "删除失败"
-            failure.informativeText = "文件可能被占用，或这是最后一份预设。"
+            failure.messageText = i18n.t("menubar.delete.failed.title")
+            failure.informativeText = i18n.t("menubar.delete.failed.body")
             failure.alertStyle = .warning
-            failure.addButton(withTitle: "好")
+            failure.addButton(withTitle: i18n.t("common.ok"))
             failure.runModal()
         }
     }
@@ -265,22 +269,26 @@ struct MenuBarContent: View {
                 Image(systemName: "exclamationmark.triangle.fill")
                     .foregroundStyle(.orange)
                 VStack(alignment: .leading, spacing: 2) {
-                    Text("未授权辅助功能")
+                    Text(i18n.t("menubar.permission.title"))
                         .font(.callout)
-                    Text("如果系统设置里已有，先移除再重新添加")
+                    Text(i18n.t("menubar.permission.body"))
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
             }
-            HStack(spacing: 8) {
-                Button("打开系统设置") {
+            // 280pt 宽的面板放不下三个并排按钮（英文更放不下），
+            // 主按钮单独一行，剩下两个并排在第二行。
+            VStack(alignment: .leading, spacing: 4) {
+                Button(i18n.t("common.openSystemSettings")) {
                     permissionMonitor.openAccessibilitySettings()
                 }
-                Button("在 Finder 中显示") {
-                    permissionMonitor.revealAppInFinder()
-                }
-                Button("重新检测") {
-                    permissionMonitor.refresh()
+                HStack(spacing: 8) {
+                    Button(i18n.t("common.revealInFinder")) {
+                        permissionMonitor.revealAppInFinder()
+                    }
+                    Button(i18n.t("common.recheck")) {
+                        permissionMonitor.refresh()
+                    }
                 }
             }
             .controlSize(.small)
@@ -292,7 +300,7 @@ struct MenuBarContent: View {
     private func openMainWindow() {
         // 保留旧实现，但默认走 openWindow 环境
         NSApp.activate(ignoringOtherApps: true)
-        if let window = NSApp.windows.first(where: { $0.title == "DS4Mate 键位编辑器" }) {
+        if let window = NSApp.windows.first(where: { $0.title == L("app.window.editor") }) {
             window.makeKeyAndOrderFront(nil)
         } else {
             openWindow(id: "main")

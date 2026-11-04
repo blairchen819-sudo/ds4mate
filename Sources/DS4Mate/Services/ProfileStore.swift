@@ -68,7 +68,7 @@ public final class ProfileStore {
     public func save(_ profile: Profile) throws {
         guard !profile.isBuiltin else {
             throw NSError(domain: "DS4Mate", code: 1, userInfo: [
-                NSLocalizedDescriptionKey: "内置 Profile 不可保存"
+                NSLocalizedDescriptionKey: L("profile.error.builtinSave")
             ])
         }
         let url = profilesDirectory.appendingPathComponent("\(profile.id.uuidString).json")
@@ -93,7 +93,7 @@ public final class ProfileStore {
     public func delete(_ profile: Profile) throws {
         guard !profile.isBuiltin else {
             throw NSError(domain: "DS4Mate", code: 2, userInfo: [
-                NSLocalizedDescriptionKey: "内置 Profile 不可删除"
+                NSLocalizedDescriptionKey: L("profile.error.builtinDelete")
             ])
         }
         let url = profilesDirectory.appendingPathComponent("\(profile.id.uuidString).json")
@@ -104,9 +104,10 @@ public final class ProfileStore {
 
     /// 初始预设：首次启动（或预设被全部删除）时自动生成。
     /// 内容沿用旧版「默认」那套鼠标/键盘映射，但它就是一份普通预设，可改、可删。
+    /// 名字按当前界面语言生成（英文界面下是 `Default`），之后就是普通用户数据，不随语言变。
     public static func makeStarterProfile() -> Profile {
         Profile(
-            name: "默认",
+            name: L("profile.starter"),
             isBuiltin: false,
             bindings: [
                 .init(input: .leftStickX, action: .scroll),

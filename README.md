@@ -1,11 +1,11 @@
 # DS4Mate
 
 > **Use a PS4 DualShock 4 as a mouse, keyboard and shortcut remote on macOS.**
-> Native SwiftUI menu bar app with visual button mapping and swappable profiles.
+> Native SwiftUI menu bar app with visual button mapping, swappable profiles and a bilingual (English / 简体中文) UI.
 >
-> 把 PS4 DualShock 4 手柄变成 Mac 的鼠标 / 键盘 / 快捷键遥控器，原生 SwiftUI 菜单栏 App。
+> 把 PS4 DualShock 4 手柄变成 Mac 的鼠标 / 键盘 / 快捷键遥控器，原生 SwiftUI 菜单栏 App，界面支持中英双语。
 
-**状态**：v1.0 MVP 已完成，83/83 冒烟测试通过，可启动运行。
+**状态**：v1.0 MVP 已完成，110/110 冒烟测试通过，可启动运行。
 
 > **说明**：DS4Mate 是带图形界面的 macOS **菜单栏 App**（`@main App` + `MenuBarExtra`，打包为 `.app` 运行），**不是命令行 / 终端程序**，没有 CLI 参数或终端交互界面。
 
@@ -22,15 +22,16 @@
 # 2. 启动 App
 open build/DS4Mate.app
 
-# 3. 首次启动会弹出 4 步引导：
+# 3. 首次启动先弹语言选择（English / 简体中文，点一下即生效，之后可在「设置 → 通用」改）
+# 4. 选完语言接着走 4 步引导：
 #    - 欢迎
 #    - 授权辅助功能（系统设置 → 隐私与安全性 → 辅助功能，勾选 DS4Mate.app）
 #    - 配对 PS4 手柄（按住 Share + PS 进入配对模式）
 #    - 试玩默认映射
 
-# 4. 推动右摇杆 = 移动鼠标
-# 5. 按 × = 鼠标左键
-# 6. 按 Options 1 秒 = 退出
+# 5. 推动右摇杆 = 移动鼠标
+# 6. 按 × = 鼠标左键
+# 7. 按 Options 1 秒 = 退出
 ```
 
 ### 运行测试
@@ -39,7 +40,7 @@ open build/DS4Mate.app
 ./build/DS4MateTests
 ```
 
-期望输出：`通过：83 / 失败：0`
+期望输出：`通过：110 / 失败：0`
 
 ---
 
@@ -58,6 +59,7 @@ open build/DS4Mate.app
 | **数据** | 用户自定义 Profile 支持自动备份损坏文件 |
 | **桌面切换** | 通过调度中心（Spaces）切换虚拟桌面，配合「上一个 / 下一个桌面」系统快捷键预设 |
 | **千问语音控制** | 一键开关通义千问（Qwen）语音通话与麦克风静音；走辅助功能（AX）点击其通话按钮，自动跨桌面切换并切回原窗口 |
+| **双语界面** | 英文 / 简体中文，首次启动先选语言，之后在「设置 → 通用」随时切换，**点一下即时生效，不用重启**；词条表由 `scripts/check-i18n.py` 在构建时校验中英一一对应 |
 
 ---
 
@@ -143,6 +145,7 @@ cp examples/workbuddy.json examples/orca.json \
 - **PS4 接入**：`IOKit` / `IOBluetooth` 的 `IOHIDManager` 直接解析蓝牙 HID 报告（vendor `0x054C`，pid `0x09CC`/`0x05C4`/`0x0CE6`）。_注：早期方案计划用 `GameController.framework`，但 macOS 26 上该框架的 PS4 事件流存在 bug，最终改走 IOHIDManager 绕过，详见 `Sources/DS4Mate/Services/HIDControllerService.swift` 顶部注释。_
 - **事件合成**：CoreGraphics `CGEvent.post(tap: .cgSessionEventTap)`
 - **持久化**：Codable JSON + @AppStorage
+- **本地化**：运行时双语词典（`Localization.swift` + `LocalizableStrings.swift`，297 条 × 2 语言）。不用 `.lproj` 是因为构建走手工 bundle 组装，且系统级语言切换要重启进程才生效
 - **打包**：手搓 `.app` bundle + 自签证书 `DS4Mate Local Signing`（固定签名身份，避免 TCC 在每次重建后使「辅助功能 / 输入监控」授权失效；无证书时回退 ad-hoc，见 `scripts/build.sh`）
 
 ---
@@ -162,14 +165,15 @@ ds4mate/
 │   ├── decisions/                 # 9 个 ADR + JSON Schema
 │   └── adr-index.md
 ├── Sources/DS4Mate/
-│   ├── App/                       # @main + AppState
-│   ├── Models/                    # 数据模型
+│   ├── App/                       # @main / AppState / Localization / 首启调度
+│   ├── Models/                    # 数据模型（含快捷键语义表）
 │   ├── Services/                  # ControllerService / EventSynthesizer 等
-│   ├── Views/                     # SwiftUI 视图
+│   ├── Views/                     # SwiftUI 视图（含语言选择页）
 │   └── Resources/                 # Info.plist
-├── Tests/RunTests.swift           # 83 个冒烟测试
+├── Tests/RunTests.swift           # 110 个冒烟测试
 ├── examples/                      # 两套现成配置（workbuddy / orca）
-├── scripts/build.sh               # 一键构建脚本
+├── scripts/build.sh               # 一键构建脚本（含词条校验门禁）
+├── scripts/check-i18n.py          # 中英词条一致性校验
 ├── Package.swift                  # SwiftPM 定义
 └── build/                         # 编译产物
     ├── DS4Mate                    # 独立可执行（约 1.8MB）

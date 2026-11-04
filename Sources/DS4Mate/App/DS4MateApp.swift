@@ -142,7 +142,7 @@ struct DS4MateApp: App {
         .menuBarExtraStyle(.window)
 
         // 主窗口（可视化键位编辑器）
-        Window("DS4Mate 键位编辑器", id: "main") {
+        Window(L("app.window.editor"), id: "main") {
             EditorView()
                 .environmentObject(appState)
                 .environmentObject(controllerService)

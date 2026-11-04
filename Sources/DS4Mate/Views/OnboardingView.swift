@@ -4,6 +4,7 @@ import SwiftUI
 struct OnboardingView: View {
     @EnvironmentObject var appState: AppState
     @EnvironmentObject var permissionMonitor: PermissionMonitor
+    @ObservedObject private var i18n = Localization.shared
     @State private var currentStep = 0
 
     var body: some View {
@@ -29,21 +30,21 @@ struct OnboardingView: View {
             // 底部按钮
             HStack {
                 if currentStep > 0 {
-                    Button("上一步") {
+                    Button(i18n.t("onboarding.back")) {
                         currentStep -= 1
                     }
                 }
                 Spacer()
                 if currentStep < 3 {
                     Button(currentStep == 1 && !permissionMonitor.isAccessibilityGranted
-                          ? "已授权，继续"
-                          : "下一步") {
+                          ? i18n.t("onboarding.next.authorized")
+                          : i18n.t("onboarding.next")) {
                         currentStep += 1
                     }
                     .keyboardShortcut(.defaultAction)
                     .disabled(currentStep == 1 && !permissionMonitor.isAccessibilityGranted)
                 } else {
-                    Button("开始使用") {
+                    Button(i18n.t("onboarding.start")) {
                         appState.completeOnboarding()
                     }
                     .keyboardShortcut(.defaultAction)
@@ -61,9 +62,9 @@ struct OnboardingView: View {
                 .imageScale(.large)
                 .font(.system(size: 64))
                 .foregroundStyle(.tint)
-            Text("欢迎使用 DS4Mate")
+            Text(i18n.t("onboarding.welcome.title"))
                 .font(.title)
-            Text("把 PS4 DualShock 4 手柄变成 Mac 的鼠标和键盘遥控器。\n接下来我们花 1 分钟配置一下。")
+            Text(i18n.t("onboarding.welcome.body"))
                 .multilineTextAlignment(.center)
                 .foregroundStyle(.secondary)
         }
@@ -75,9 +76,9 @@ struct OnboardingView: View {
                 .imageScale(.large)
                 .font(.system(size: 48))
                 .foregroundStyle(.tint)
-            Text("授予辅助功能权限")
+            Text(i18n.t("onboarding.permission.title"))
                 .font(.title2)
-            Text("DS4Mate 通过 macOS 的「辅助功能」权限向系统注入鼠标和键盘事件。这是 macOS 的安全机制，无法绕过。")
+            Text(i18n.t("onboarding.permission.body"))
                 .foregroundStyle(.secondary)
             HStack(spacing: 8) {
                 Image(systemName: permissionMonitor.isAccessibilityGranted
@@ -85,16 +86,16 @@ struct OnboardingView: View {
                       : "circle.dashed")
                     .foregroundStyle(permissionMonitor.isAccessibilityGranted ? .green : .secondary)
                 Text(permissionMonitor.isAccessibilityGranted
-                     ? "已授权 ✓"
-                     : "等待授权…（去系统设置中勾选 DS4Mate.app）")
+                     ? i18n.t("onboarding.permission.granted")
+                     : i18n.t("onboarding.permission.waiting"))
             }
             .font(.callout)
             HStack {
-                Button("打开系统设置") {
+                Button(i18n.t("common.openSystemSettings")) {
                     permissionMonitor.requestAccessibility()
                     permissionMonitor.openAccessibilitySettings()
                 }
-                Button("重新检测") {
+                Button(i18n.t("common.recheck")) {
                     permissionMonitor.refresh()
                 }
             }
@@ -107,15 +108,15 @@ struct OnboardingView: View {
                 .imageScale(.large)
                 .font(.system(size: 48))
                 .foregroundStyle(.tint)
-            Text("配对 PS4 手柄")
+            Text(i18n.t("onboarding.pairing.title"))
                 .font(.title2)
             VStack(alignment: .leading, spacing: 8) {
-                Text("1. 长按手柄上的 Share 键 + PS 键，直到灯条快速闪烁")
-                Text("2. 打开「系统设置 → 蓝牙」")
-                Text("3. 在设备列表中选择「DUALSHOCK 4 Wireless Controller」")
+                Text(i18n.t("onboarding.pairing.step1"))
+                Text(i18n.t("onboarding.pairing.step2"))
+                Text(i18n.t("onboarding.pairing.step3"))
             }
             .font(.callout)
-            Text("配对成功后，DS4Mate 会自动连接。")
+            Text(i18n.t("onboarding.pairing.footnote"))
                 .font(.caption)
                 .foregroundStyle(.secondary)
         }
@@ -127,17 +128,17 @@ struct OnboardingView: View {
                 .imageScale(.large)
                 .font(.system(size: 48))
                 .foregroundStyle(.tint)
-            Text("试试默认映射")
+            Text(i18n.t("onboarding.try.title"))
                 .font(.title2)
             VStack(alignment: .leading, spacing: 8) {
-                Text("• 推动右摇杆 = 移动鼠标")
-                Text("• 推动左摇杆 = 滚轮滚动")
-                Text("• 按 × = 鼠标左键")
-                Text("• 按 ○ = 鼠标右键")
-                Text("• 按 Options 1 秒 = 退出 DS4Mate")
+                Text(i18n.t("onboarding.try.line1"))
+                Text(i18n.t("onboarding.try.line2"))
+                Text(i18n.t("onboarding.try.line3"))
+                Text(i18n.t("onboarding.try.line4"))
+                Text(i18n.t("onboarding.try.line5"))
             }
             .font(.callout)
-            Text("所有按键都可以在「键位编辑器」中重新映射。")
+            Text(i18n.t("onboarding.try.footnote"))
                 .font(.caption)
                 .foregroundStyle(.secondary)
         }

@@ -142,7 +142,7 @@ struct DS4MateTestRunner {
         // =====================================================
         suite("初始预设") {
             let starter = ProfileStore.makeStarterProfile()
-            expectEqual(starter.name, "默认", "初始预设名称")
+            expectEqual(starter.name, L("profile.starter"), "初始预设名称跟随界面语言")
             expect(!starter.isBuiltin, "初始预设是普通预设（非内置）")
             for input in ControllerInput.allCases {
                 expect(starter.binding(for: input) != nil, "初始预设覆盖 \(input.displayName)")
@@ -181,7 +181,7 @@ struct DS4MateTestRunner {
             // 空目录 → 自动补一份初始预设，列表不会是空的
             let initial = store.loadAll()
             expectEqual(initial.count, 1, "空目录自动生成一份初始预设")
-            expectEqual(initial.first?.name, "默认", "初始预设名称")
+            expectEqual(initial.first?.name, L("profile.starter"), "初始预设名称跟随界面语言")
 
             // 再加载一次不会重复生成
             expectEqual(store.loadAll().count, 1, "初始预设不会重复生成")
@@ -250,6 +250,91 @@ struct DS4MateTestRunner {
                 print("  ✗ saveAs 失败：\(error)")
                 failed += 1
             }
+        }
+
+        // =====================================================
+        // Suite: 本地化 · 语言解析
+        // =====================================================
+        suite("本地化 · 语言解析") {
+            expectEqual(Localization.parse("en"), .english, "en → 英文")
+            expectEqual(Localization.parse("en-US"), .english, "en-US → 英文")
+            expectEqual(Localization.parse("zh"), .chinese, "zh → 中文")
+            expectEqual(Localization.parse("zh-Hans"), .chinese, "zh-Hans → 中文")
+            expectEqual(Localization.parse("zh_CN"), .chinese, "zh_CN → 中文")
+            expect(Localization.parse("fr") == nil, "未知语言返回 nil")
+
+            expectEqual(Localization.systemPreferredLanguage(preferredLanguages: ["zh-Hans-CN"]), .chinese,
+                        "系统首选中文")
+            expectEqual(Localization.systemPreferredLanguage(preferredLanguages: ["en-US"]), .english,
+                        "系统首选英文")
+            expectEqual(Localization.systemPreferredLanguage(preferredLanguages: []), .english,
+                        "系统无首选语言时兜底英文")
+
+            let defaults = UserDefaults(suiteName: "ds4mate.tests.lang")!
+            defaults.removePersistentDomain(forName: "ds4mate.tests.lang")
+            expectEqual(Localization.resolveInitialLanguage(defaults: defaults, environment: [:]),
+                        Localization.systemPreferredLanguage(),
+                        "没有偏好时跟随系统语言")
+            expectEqual(Localization.resolveInitialLanguage(
+                defaults: defaults, environment: [Localization.environmentKey: "zh"]), .chinese,
+                        "环境变量覆盖优先")
+            defaults.set("en", forKey: Localization.userDefaultsKey)
+            expectEqual(Localization.resolveInitialLanguage(defaults: defaults, environment: [:]),
+                        .english, "持久化偏好生效")
+            expect(defaults.string(forKey: Localization.userDefaultsKey) == "en",
+                   "运行期不覆写偏好")
+            defaults.removePersistentDomain(forName: "ds4mate.tests.lang")
+        }
+
+        // =====================================================
+        // Suite: 本地化 · 词条表
+        // =====================================================
+        suite("本地化 · 词条表") {
+            let en = L10nTable.en
+            let zh = L10nTable.zh
+
+            expectEqual(en.count, zh.count, "中英词条数量一致（\(en.count)）")
+
+            let onlyEN = Set(en.keys).subtracting(zh.keys).sorted()
+            let onlyZH = Set(zh.keys).subtracting(en.keys).sorted()
+            expect(onlyEN.isEmpty, "没有只在英文表里的 key\(onlyEN.isEmpty ? "" : "：\(onlyEN.prefix(5))")")
+            expect(onlyZH.isEmpty, "没有只在中文表里的 key\(onlyZH.isEmpty ? "" : "：\(onlyZH.prefix(5))")")
+
+            let emptyValues = en.filter { $0.value.isEmpty }.keys.sorted()
+                + zh.filter { $0.value.isEmpty }.keys.sorted()
+            expect(emptyValues.isEmpty, "没有空词条\(emptyValues.isEmpty ? "" : "：\(emptyValues.prefix(5))")")
+
+            // 占位符必须两边一致，否则格式化会少填或多填参数
+            func placeholders(_ text: String) -> [String] {
+                let pattern = "%[-0-9.]*[@a-zA-Z]"
+                guard let regex = try? NSRegularExpression(pattern: pattern) else { return [] }
+                let range = NSRange(text.startIndex..., in: text)
+                return regex.matches(in: text, range: range).compactMap {
+                    Range($0.range, in: text).map { String(text[$0]) }
+                }
+            }
+            let mismatched = Set(en.keys).intersection(zh.keys).filter {
+                placeholders(en[$0] ?? "") != placeholders(zh[$0] ?? "")
+            }.sorted()
+            expect(mismatched.isEmpty,
+                   "中英占位符一致\(mismatched.isEmpty ? "" : "：\(mismatched.prefix(5))")")
+
+            // 切换语言后取值与格式化都要跟着变
+            let original = Localization.shared.language
+            defer { Localization.shared.setLanguage(original) }
+
+            Localization.shared.setLanguage(.chinese)
+            expectEqual(L("profile.starter"), "默认", "中文：初始预设名")
+            expectEqual(L("editor.reset.confirm", 3), "删除 3 份预设", "中文：带参数词条")
+            expectEqual(ProfileStore.makeStarterProfile().name, "默认", "中文下初始预设在叫「默认」")
+
+            Localization.shared.setLanguage(.english)
+            expectEqual(L("profile.starter"), "Default", "英文：初始预设名")
+            expectEqual(L("editor.reset.confirm", 3), "Delete 3 profile(s)", "英文：带参数词条")
+            expectEqual(ProfileStore.makeStarterProfile().name, "Default", "英文下初始预设叫 Default")
+            expectEqual(Action.mouseLeftClick.displayName, "Left Click", "英文：动作名")
+            expectEqual(ControllerInput.dpadUp.displayName, "D-Pad Up", "英文：按键名")
+            expectEqual(ShortcutCatalog.workBuddy.first?.title, "Global Search", "英文：快捷键语义")
         }
 
         // =====================================================

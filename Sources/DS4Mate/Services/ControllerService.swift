@@ -40,8 +40,10 @@ public final class ControllerService: ObservableObject {
     }
     /// 已收到的 HID 报告总数，用于界面自检
     @Published public private(set) var hidReportCount: Int = 0
-    /// HID 层自检信息（未连接 / 权限不足 / 已连接）
-    @Published public private(set) var hidStatus: String = "未启动"
+    /// HID 层自检信息（未连接 / 权限不足 / 已连接）。
+    /// 直接透传 HID 层的本地化结果：切语言时视图重算即可拿到新文案，
+    /// 不需要等下一次状态变化。
+    public var hidStatus: String { hidService.statusMessage }
 
     private var lastLeftTrigger: Float = 0
     private var lastRightTrigger: Float = 0
@@ -127,7 +129,6 @@ public final class ControllerService: ObservableObject {
             let newState: ControllerConnectionState = self.hidService.isConnected
                 ? .connected(controllerName: "DUALSHOCK 4")
                 : .disconnected
-            let status = self.hidService.statusMessage
             DispatchQueue.main.async {
                 if newState != self.connectionState {
                     // 手柄断开时松开模拟中的修饰键，否则松开事件永远等不到
@@ -135,9 +136,6 @@ public final class ControllerService: ObservableObject {
                         self.eventSynthesizer.releaseAllModifiers()
                     }
                     self.connectionState = newState
-                }
-                if status != self.hidStatus {
-                    self.hidStatus = status
                 }
             }
         }

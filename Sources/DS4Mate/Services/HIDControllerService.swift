@@ -34,8 +34,20 @@ public final class HIDControllerService {
     public private(set) var lastInput: (input: ControllerInput, at: Date)?
     /// 累计收到的 HID 报告数，用于自检（UI 上展示）
     public private(set) var reportCount: Int = 0
-    /// 最近一次 attach 的结果说明，用于 UI 提示
-    public private(set) var statusMessage: String = "未启动"
+    /// 最近一次 attach 的结果说明 —— 存本地化 key + 参数，取值时才翻译，
+    /// 这样切换界面语言后状态文案也会跟着变（不用等下一次 HID 事件）。
+    public private(set) var statusKey: String = "hid.status.notStarted"
+    private var statusArgs: [CVarArg] = []
+
+    /// 当前语言下的状态说明（UI 直接读这个）
+    public var statusMessage: String {
+        statusArgs.isEmpty ? L(statusKey) : String(format: L(statusKey), arguments: statusArgs)
+    }
+
+    private func setStatus(_ key: String, _ args: CVarArg...) {
+        statusKey = key
+        statusArgs = args
+    }
 
     private var manager: IOHIDManager?
     private var device: IOHIDDevice?
@@ -77,7 +89,7 @@ public final class HIDControllerService {
         reportBuffer?.deallocate()
         reportBuffer = nil
         isConnected = false
-        statusMessage = "已停止"
+        setStatus("hid.status.stopped")
     }
 
     // MARK: - Manager 装配
@@ -116,7 +128,7 @@ public final class HIDControllerService {
         let openResult = IOHIDManagerOpen(m, IOOptionBits(kIOHIDOptionsTypeNone))
         NSLog("[DS4Mate/HID] IOHIDManagerOpen -> 0x%08X", UInt32(bitPattern: openResult))
         if openResult != kIOReturnSuccess {
-            statusMessage = "IOHIDManager 打开失败 (0x\(String(UInt32(bitPattern: openResult), radix: 16)))"
+            setStatus("hid.status.managerOpenFailed", String(UInt32(bitPattern: openResult), radix: 16))
         }
 
         self.manager = m
@@ -137,7 +149,7 @@ public final class HIDControllerService {
     private func enumerateExistingDevices() {        guard let m = manager else { return }
         guard let set = IOHIDManagerCopyDevices(m) else {
             NSLog("[DS4Mate/HID] no devices snapshot")
-            if !isConnected { statusMessage = "未发现 Sony 设备" }
+            if !isConnected { setStatus("hid.status.noDevice") }
             return
         }
         let count = CFSetGetCount(set)
@@ -155,7 +167,7 @@ public final class HIDControllerService {
             }
         }
         if !isConnected {
-            statusMessage = "找到了 Sony 设备但不是 PS4 手柄（pid 不匹配）"
+            setStatus("hid.status.notPS4")
         }
     }
 
@@ -178,7 +190,7 @@ public final class HIDControllerService {
         }
         guard pid == 0x09CC || pid == 0x05C4 || pid == 0x0CE6 else {
             NSLog("[DS4Mate/HID] pid 0x%04X not supported, skip", pid)
-            statusMessage = "设备 \(String(format: "0x%04X", pid)) 暂不支持"
+            setStatus("hid.status.unsupportedDevice", String(format: "0x%04X", pid))
             return
         }
 
@@ -193,7 +205,7 @@ public final class HIDControllerService {
         NSLog("[DS4Mate/HID] IOHIDDeviceOpen -> 0x%08X", UInt32(bitPattern: openResult))
         if openResult != kIOReturnSuccess {
             // 常见：kIOReturnExclusiveAccess(0xE00002E2) / kIOReturnNotPermitted
-            statusMessage = "手柄打开失败 (0x\(String(UInt32(bitPattern: openResult), radix: 16)))，可能需要在「隐私与安全性 → 输入监控」里允许"
+            setStatus("hid.status.openFailed", String(UInt32(bitPattern: openResult), radix: 16))
             NSLog("[DS4Mate/HID] open failed, abort attach")
             return
         }
@@ -217,7 +229,7 @@ public final class HIDControllerService {
 
         self.device = dev
         self.isConnected = true
-        self.statusMessage = "已连接：\(product)"
+        self.setStatus("hid.status.connected", product)
         pressState.removeAll()
         didWarnNoReport = false
         NSLog("[DS4Mate/HID] PS4 attached, listening for reports (commonModes)")
@@ -227,7 +239,7 @@ public final class HIDControllerService {
             guard let self = self else { return }
             if self.reportCount == 0 && !self.didWarnNoReport {
                 self.didWarnNoReport = true
-                self.statusMessage = "已打开手柄但收不到数据，请检查「输入监控」权限"
+                self.setStatus("hid.status.noReports")
                 NSLog("[DS4Mate/HID] ⚠️ no reports received after 3s — check Input Monitoring permission")
             }
         }
@@ -242,7 +254,7 @@ public final class HIDControllerService {
         device = nil
         isConnected = false
         pressState.removeAll()
-        statusMessage = "手柄已断开"
+        setStatus("hid.status.disconnected")
     }
 
     // MARK: - 报告解析

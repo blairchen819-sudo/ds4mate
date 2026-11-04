@@ -15,6 +15,14 @@ rm -rf build
 mkdir -p build/DS4Mate.app/Contents/MacOS
 mkdir -p build/DS4Mate.app/Contents/Resources
 
+# 1.5 词条表门禁：中英 key 必须一一对应，否则界面会出现另一种语言的串场
+echo ""
+echo "→ 校验界面词条（check-i18n.py）"
+if ! python3 scripts/check-i18n.py; then
+  echo "✗ 词条校验失败，构建中止"
+  exit 1
+fi
+
 # 2. 编译主 App
 SDK_PATH="$(xcrun --show-sdk-path)"
 echo ""
@@ -40,8 +48,11 @@ xcrun swiftc \
   -parse-as-library \
   -O \
   -o build/DS4MateTests \
+  Sources/DS4Mate/App/Localization.swift \
+  Sources/DS4Mate/App/LocalizableStrings.swift \
   Sources/DS4Mate/Models/ControllerInput.swift \
   Sources/DS4Mate/Models/Action.swift \
+  Sources/DS4Mate/Models/ShortcutCatalog.swift \
   Sources/DS4Mate/Models/Profile.swift \
   Sources/DS4Mate/Services/ProfileStore.swift \
   Tests/RunTests.swift

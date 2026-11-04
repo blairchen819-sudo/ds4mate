@@ -18,6 +18,9 @@ public final class AppState: ObservableObject {
     public let permissionMonitor: PermissionMonitor
     public let profileStore: ProfileStore
 
+    /// 语言变化的转发订阅（见 init 内注释）
+    private var cancellables = Set<AnyCancellable>()
+
     public init(
         profileStore: ProfileStore = .shared,
         controllerService: ControllerService = .shared,
@@ -46,12 +49,19 @@ public final class AppState: ObservableObject {
             }
         }
 
-        // 首次启动显示 Onboarding
-        if !hasCompletedOnboarding {
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
-                self.showingOnboarding = true
+        // 语言切换后：
+        // ① 转发 objectWillChange —— 窗口标题这类不经过 `@ObservedObject` 的文案
+        //    依赖 AppState 的变更通知才会重算；
+        // ② 把「还没被改过名的初始预设」改成当前语言的名字（英文界面下叫 Default）。
+        Localization.shared.objectWillChange
+            .sink { [weak self] _ in
+                Task { @MainActor in
+                    guard let self else { return }
+                    self.objectWillChange.send()
+                    self.renameStarterProfileIfUntouched()
+                }
             }
-        }
+            .store(in: &cancellables)
 
         // 把 active profile 推给 controller service
         controllerService.activeProfile = self.activeProfile
@@ -76,6 +86,16 @@ public final class AppState: ObservableObject {
 
         // 启动权限轮询
         permissionMonitor.startPolling()
+
+        // 首次启动流程：还没选过语言，或者还没走完引导 → 交给调度者弹窗。
+        // （OnboardingView 此前从未被任何视图展示，`showingOnboarding` 只被赋值未被消费。）
+        if !Localization.shared.hasChosenLanguage || !hasCompletedOnboarding {
+            Task { @MainActor [weak self] in
+                try? await Task.sleep(nanoseconds: 350_000_000)
+                guard let self else { return }
+                FirstRunCoordinator.shared.start(appState: self)
+            }
+        }
     }
 
     // MARK: - Profile 操作
@@ -178,6 +198,23 @@ public final class AppState: ObservableObject {
         hasCompletedOnboarding = true
         showingOnboarding = false
         persistRuntime()
+    }
+
+    /// 首次启动时初始预设先于语言选择被创建，名字会是当时默认语言那套（「默认」）。
+    /// 用户选完语言后，如果这份预设还顶着「初始名」且一份都没多，就改成新语言的名字。
+    /// 只认「两种语言的初始名」这一个条件——用户自己改过名的预设一律不动。
+    public func renameStarterProfileIfUntouched() {
+        guard profiles.count == 1, let profile = profiles.first, !profile.isBuiltin else { return }
+        let starterNames = Set(AppLanguage.allCases.map { Localization.shared.t("profile.starter", in: $0) })
+        guard starterNames.contains(profile.name) else { return }
+        let newName = L("profile.starter")
+        guard newName != profile.name else { return }
+
+        var renamed = profile
+        renamed.name = newName
+        try? profileStore.save(renamed)
+        profiles = [renamed]
+        selectProfile(renamed.id)
     }
 
     private func persistRuntime() {

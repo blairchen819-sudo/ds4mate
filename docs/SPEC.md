@@ -351,7 +351,7 @@ struct AppRuntimeState: Codable {
 - **崩溃容忍**：单 Profile JSON 损坏不影响其他 Profile 加载；损坏文件自动备份为 `*.broken.{timestamp}.json`
 - **配置文件原子写入**：通过 `Data.write(to:options: .atomic)` 防止半写损坏
 - **不做 A11y 高级特性**：VoiceOver 标签可读，但不承诺完整 a11y 合规（v1 之后改进）
-- **国际化**：v1 仅简体中文；string catalog 化（`Localizable.strings`）便于后续扩展
+- **国际化**：v1 支持英文 / 简体中文双语，首次启动先选语言；实现走运行时词典（`Sources/DS4Mate/App/Localization.swift` + `LocalizableStrings.swift`）而非 `.lproj`，以便切换立即生效、无需重启进程。词条一致性由 `scripts/check-i18n.py` 在构建期校验
 - **日志**：v1 走 `os_log`（系统统一收集）；自定义日志文件推迟 v1.1
 - **崩溃报告**：v1 不集成第三方 SDK（无 Sentry/Crashlytics）
 

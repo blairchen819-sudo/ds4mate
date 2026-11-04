@@ -29,31 +29,31 @@ public enum ControllerInput: String, Codable, CaseIterable, Hashable, Sendable {
     case leftTriggerAxis  // L2 模拟
     case rightTriggerAxis // R2 模拟
 
-    /// 人类可读名称（中文 UI 用）
+    /// 人类可读名称（跟随界面语言）
     public var displayName: String {
         switch self {
-        case .cross: return "× 键"
-        case .circle: return "○ 键"
-        case .square: return "□ 键"
-        case .triangle: return "△ 键"
+        case .cross: return L("input.cross")
+        case .circle: return L("input.circle")
+        case .square: return L("input.square")
+        case .triangle: return L("input.triangle")
         case .l1: return "L1"
         case .r1: return "R1"
-        case .l3: return "L3（左摇杆按下）"
-        case .r3: return "R3（右摇杆按下）"
-        case .dpadUp: return "D-Pad 上"
-        case .dpadDown: return "D-Pad 下"
-        case .dpadLeft: return "D-Pad 左"
-        case .dpadRight: return "D-Pad 右"
+        case .l3: return L("input.l3")
+        case .r3: return L("input.r3")
+        case .dpadUp: return L("input.dpadUp")
+        case .dpadDown: return L("input.dpadDown")
+        case .dpadLeft: return L("input.dpadLeft")
+        case .dpadRight: return L("input.dpadRight")
         case .share: return "Share"
         case .options: return "Options"
-        case .ps: return "PS 键"
-        case .touchpadButton: return "触摸板按键"
-        case .leftStickX: return "左摇杆 X"
-        case .leftStickY: return "左摇杆 Y"
-        case .rightStickX: return "右摇杆 X"
-        case .rightStickY: return "右摇杆 Y"
-        case .leftTriggerAxis: return "L2 模拟"
-        case .rightTriggerAxis: return "R2 模拟"
+        case .ps: return L("input.ps")
+        case .touchpadButton: return L("input.touchpadButton")
+        case .leftStickX: return L("input.leftStickX")
+        case .leftStickY: return L("input.leftStickY")
+        case .rightStickX: return L("input.rightStickX")
+        case .rightStickY: return L("input.rightStickY")
+        case .leftTriggerAxis: return L("input.leftTriggerAxis")
+        case .rightTriggerAxis: return L("input.rightTriggerAxis")
         }
     }
 
@@ -71,11 +71,11 @@ public enum ControllerInput: String, Codable, CaseIterable, Hashable, Sendable {
     /// 硬件类型标签（详情面板右上角的胶囊标记）
     public var kindLabel: String {
         switch self {
-        case .leftTriggerAxis, .rightTriggerAxis: return "扳机"
-        case .leftStickX, .leftStickY, .rightStickX, .rightStickY: return "摇杆轴"
-        case .touchpadButton: return "触摸板"
-        case .l3, .r3: return "摇杆按下"
-        default: return "按钮"
+        case .leftTriggerAxis, .rightTriggerAxis: return L("input.kind.trigger")
+        case .leftStickX, .leftStickY, .rightStickX, .rightStickY: return L("input.kind.stickAxis")
+        case .touchpadButton: return L("input.kind.touchpad")
+        case .l3, .r3: return L("input.kind.stickPress")
+        default: return L("input.kind.button")
         }
     }
 }

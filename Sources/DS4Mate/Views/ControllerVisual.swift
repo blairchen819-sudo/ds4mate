@@ -6,6 +6,8 @@ struct ControllerVisual: View {
     let selectedInput: ControllerInput?
     let onSelect: (ControllerInput) -> Void
 
+    @ObservedObject private var i18n = Localization.shared
+
     private let buttonSize: CGFloat = 44
     private let stickSize: CGFloat = 60
 
@@ -49,7 +51,7 @@ struct ControllerVisual: View {
                     VStack(spacing: 6) {
                         dpad
                             .frame(width: 110, height: 110)
-                        stickButton(.l3, label: "L3", help: "左摇杆按下")
+                        stickButton(.l3, label: "L3", help: i18n.t("visual.l3.help"))
                     }
 
                     // 中：触摸板
@@ -62,7 +64,7 @@ struct ControllerVisual: View {
                                     Image(systemName: "rectangle.compress.vertical")
                                         .imageScale(.large)
                                 )
-                            Text("触摸板")
+                            Text(i18n.t("visual.touchpad"))
                                 .font(.caption2)
                                 .foregroundStyle(.secondary)
                         }
@@ -73,7 +75,7 @@ struct ControllerVisual: View {
                     VStack(spacing: 6) {
                         xyab
                             .frame(width: 110, height: 110)
-                        stickButton(.r3, label: "R3", help: "右摇杆按下")
+                        stickButton(.r3, label: "R3", help: i18n.t("visual.r3.help"))
                     }
                 }
 
@@ -96,13 +98,13 @@ struct ControllerVisual: View {
     private var dpad: some View {
         ZStack {
             // 上下左右
-            button(.dpadUp, label: "上", systemImage: "chevron.up")
+            button(.dpadUp, label: i18n.t("visual.up"), systemImage: "chevron.up")
                 .offset(y: -36)
-            button(.dpadDown, label: "下", systemImage: "chevron.down")
+            button(.dpadDown, label: i18n.t("visual.down"), systemImage: "chevron.down")
                 .offset(y: 36)
-            button(.dpadLeft, label: "左", systemImage: "chevron.left")
+            button(.dpadLeft, label: i18n.t("visual.left"), systemImage: "chevron.left")
                 .offset(x: -36)
-            button(.dpadRight, label: "右", systemImage: "chevron.right")
+            button(.dpadRight, label: i18n.t("visual.right"), systemImage: "chevron.right")
                 .offset(x: 36)
         }
     }
