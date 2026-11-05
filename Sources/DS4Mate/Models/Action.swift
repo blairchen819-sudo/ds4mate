@@ -256,6 +256,8 @@ public enum Action: Codable, Hashable, Sendable {
     case toggleQwenVoice
     /// 切换千问客户端的麦克风（聊天窗口常开，只控制麦克风）
     case toggleQwenMic
+    /// 切换讯飞输入法的语音输入（AX 移动语音面板后点击其麦克风按钮）
+    case iflytekVoice
 
     public var displayName: String {
         switch self {
@@ -285,6 +287,7 @@ public enum Action: Codable, Hashable, Sendable {
         case .openMainWindow: return L("action.openMainWindow")
         case .toggleQwenVoice: return L("action.toggleQwenVoice")
         case .toggleQwenMic: return L("action.toggleQwenMic")
+        case .iflytekVoice: return L("action.iflytekVoice")
         }
     }
 
@@ -340,6 +343,8 @@ public enum Action: Codable, Hashable, Sendable {
             return L("action.toggleQwenVoice.desc")
         case .toggleQwenMic:
             return L("action.toggleQwenMic.desc")
+        case .iflytekVoice:
+            return L("action.iflytekVoice.desc")
         }
     }
 
@@ -379,6 +384,7 @@ public enum Action: Codable, Hashable, Sendable {
         case .openMainWindow: hasher.combine(16)
         case .toggleQwenVoice: hasher.combine(18)
         case .toggleQwenMic: hasher.combine(19)
+        case .iflytekVoice: hasher.combine(20)
         }
     }
 
@@ -409,6 +415,7 @@ public enum Action: Codable, Hashable, Sendable {
         case (.openMainWindow, .openMainWindow): return true
         case (.toggleQwenVoice, .toggleQwenVoice): return true
         case (.toggleQwenMic, .toggleQwenMic): return true
+        case (.iflytekVoice, .iflytekVoice): return true
         default: return false
         }
     }
@@ -464,7 +471,7 @@ public enum Action: Codable, Hashable, Sendable {
             return .system
         case .mediaKey:
             return .media
-        case .exitApp, .toggleAppEnabled, .cycleProfile, .openMainWindow, .toggleQwenVoice, .toggleQwenMic:
+        case .exitApp, .toggleAppEnabled, .cycleProfile, .openMainWindow, .toggleQwenVoice, .toggleQwenMic, .iflytekVoice:
             return .meta
         }
     }
@@ -517,6 +524,7 @@ public enum Action: Codable, Hashable, Sendable {
         case "openMainWindow": self = .openMainWindow
         case "toggleQwenVoice": self = .toggleQwenVoice
         case "toggleQwenMic": self = .toggleQwenMic
+        case "iflytekVoice": self = .iflytekVoice
         default:
             throw DecodingError.dataCorruptedError(
                 forKey: .type, in: c,
@@ -560,6 +568,7 @@ public enum Action: Codable, Hashable, Sendable {
         case .openMainWindow: try c.encode("openMainWindow", forKey: .type)
         case .toggleQwenVoice: try c.encode("toggleQwenVoice", forKey: .type)
         case .toggleQwenMic: try c.encode("toggleQwenMic", forKey: .type)
+        case .iflytekVoice: try c.encode("iflytekVoice", forKey: .type)
         }
     }
 }

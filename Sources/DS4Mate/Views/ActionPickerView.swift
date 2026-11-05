@@ -164,7 +164,8 @@ struct ActionPickerView: View {
                 return MediaAction.allCases.map { PickerItem($0.displayName, .mediaKey($0)) }
             case .meta:
                 let actions: [Action] = [.none, .exitApp, .toggleAppEnabled, .cycleProfile,
-                                         .openMainWindow, .toggleQwenVoice, .toggleQwenMic]
+                                         .openMainWindow, .toggleQwenVoice, .toggleQwenMic,
+                                         .iflytekVoice]
                 return actions.map { PickerItem($0) }
             }
         }()
@@ -246,6 +247,7 @@ struct ActionPickerView: View {
         case .openMainWindow: return "macwindow"
         case .toggleQwenVoice: return "waveform"
         case .toggleQwenMic: return "mic"
+        case .iflytekVoice: return "mic.badge.waveform"
         }
     }
 }

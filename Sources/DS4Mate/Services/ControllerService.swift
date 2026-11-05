@@ -447,6 +447,8 @@ public final class ControllerService: ObservableObject {
             QwenVoiceController.shared.toggleVoice()
         case .toggleQwenMic:
             QwenVoiceController.shared.toggleMicrophone()
+        case .iflytekVoice:
+            IFlytekVoiceController.shared.toggle()
         }
     }
 }

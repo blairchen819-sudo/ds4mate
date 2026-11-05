@@ -84,6 +84,7 @@ enum L10nTable {
         "action.openMainWindow": "Open Main Window",
         "action.toggleQwenVoice": "Toggle Qwen Voice Call",
         "action.toggleQwenMic": "Toggle Qwen Mic",
+        "action.iflytekVoice": "Toggle iFlytek Voice Input",
         "action.keyCode": "Key Code %ld",
 
         // MARK: - 动作说明
@@ -109,6 +110,7 @@ enum L10nTable {
         "action.openMainWindow.desc": "Opens the mapping editor window",
         "action.toggleQwenVoice.desc": "Clicks the voice call button of the Qwen client through Accessibility",
         "action.toggleQwenMic.desc": "Clicks the microphone button of the Qwen client through Accessibility",
+        "action.iflytekVoice.desc": "Starts or stops iFlytek voice input by clicking its voice panel button (the panel is moved on-screen temporarily and restored)",
 
         // MARK: - 分类
         "category.mouse": "Mouse",
@@ -417,6 +419,7 @@ enum L10nTable {
         "action.openMainWindow": "打开主窗口",
         "action.toggleQwenVoice": "切换千问语音",
         "action.toggleQwenMic": "切换千问麦克风",
+        "action.iflytekVoice": "切换讯飞语音输入",
         "action.keyCode": "键码 %ld",
 
         // MARK: - 动作说明
@@ -442,6 +445,7 @@ enum L10nTable {
         "action.openMainWindow.desc": "弹出键位编辑器主窗口",
         "action.toggleQwenVoice.desc": "通过辅助功能接口点击千问客户端的语音通话按钮",
         "action.toggleQwenMic.desc": "通过辅助功能接口点击千问客户端的麦克风按钮",
+        "action.iflytekVoice.desc": "点击讯飞输入法语音面板的麦克风按钮，开始或结束语音输入（面板会临时移入屏幕，点击后归位）",
 
         // MARK: - 分类
         "category.mouse": "鼠标",
