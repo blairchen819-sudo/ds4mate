@@ -119,6 +119,37 @@ struct DS4MateApp: App {
         }
     }
 
+    // MARK: - 菜单栏标题
+
+    /// 菜单栏显示的预设名，按「显示宽度」裁剪：全角算 2、半角算 1，上限 20
+    /// （约 10 个汉字 / 20 个半角字符）。用户起的长名字不裁会把整条菜单栏挤开。
+    private var menuBarProfileName: String {
+        guard let raw = appState.activeProfile?.name, !raw.isEmpty else { return "" }
+        var width = 0
+        var out = ""
+        for ch in raw {
+            let w = Self.isWideCharacter(ch) ? 2 : 1
+            if width + w > 20 { return out + "…" }
+            width += w
+            out.append(ch)
+        }
+        return out
+    }
+
+    /// 全角字符判定：CJK 表意文字、假名、谚文、全角标点等。
+    private static func isWideCharacter(_ ch: Character) -> Bool {
+        guard let scalar = ch.unicodeScalars.first else { return false }
+        switch scalar.value {
+        case 0x1100...0x115F, 0x2E80...0x303E, 0x3041...0x33FF,
+             0x3400...0x4DBF, 0x4E00...0x9FFF, 0xA000...0xA4CF,
+             0xAC00...0xD7A3, 0xF900...0xFAFF, 0xFE30...0xFE6F,
+             0xFF00...0xFF60, 0xFFE0...0xFFE6:
+            return true
+        default:
+            return false
+        }
+    }
+
     var body: some Scene {
         MenuBarExtra {
             MenuBarContent()
@@ -126,15 +157,17 @@ struct DS4MateApp: App {
                 .environmentObject(controllerService)
                 .environmentObject(permissionMonitor)
         } label: {
-            // 菜单栏图标：根据状态切换
-            HStack(spacing: 2) {
+            // 菜单栏：图标 + 当前预设名 +（映射关闭时）暂停标记。
+            // 必须写成自定义视图：实测 macOS 26 会把 `Label` / `MenuBarExtra("标题",
+            // systemImage:)` 里的标题文字丢掉，只剩图标。HStack 走的是整块视图
+            // 光栅化渲染，文字才能显示，且字号与菜单栏其他项一致、无模糊。
+            HStack(spacing: 4) {
                 Image(systemName: appState.controllerService.connectionState == .disconnected
                       ? "gamecontroller"
                       : "gamecontroller.fill")
-                    .imageScale(.small)
+                Text(menuBarProfileName)
                 if !appState.controllerService.isEnabled {
                     Image(systemName: "pause.circle.fill")
-                        .imageScale(.small)
                         .foregroundStyle(.orange)
                 }
             }
