@@ -57,6 +57,7 @@ xcrun swiftc \
   Sources/DS4Mate/Services/ProfileStore.swift \
   Sources/DS4Mate/Services/DS4TouchParser.swift \
   Sources/DS4Mate/Services/TouchpadPointerEngine.swift \
+  Sources/DS4Mate/Services/TwoFingerGestureRecognizer.swift \
   Tests/RunTests.swift
 
 # 4. 组装 .app bundle

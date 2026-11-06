@@ -547,6 +547,164 @@ struct DS4MateTestRunner {
             expectEqual(DS4CRC32.compute(empty[...]), 0, "空输入 CRC 为 0")
         }
 
+        suite("双指解析：并行触点 vs 单指时间序列") {
+            // 模拟真机双指形态：手指 A 固定在左下，手指 B 在右上移动，
+            // 一包 3 个事件 = 3 个时间采样，每事件两个触点位都有效且编号不同。
+            let payload = makeTwoFingerBTReport(samples: [
+                (ax: 510, ay: 941, bx: 1910, by: 582, idA: 27, idB: 28),
+                (ax: 510, ay: 941, bx: 1900, by: 600, idA: 27, idB: 28),
+                (ax: 510, ay: 941, bx: 1890, by: 620, idA: 27, idB: 28)
+            ])
+            expectEqual(DS4TouchParser.layout(reportID: 0x11, payload: payload),
+                        .bluetoothFull(prefix: true), "双指报告布局判定正确")
+
+            let frame = DS4TouchParser.parseTouch(payload: payload,
+                                                 layout: .bluetoothFull(prefix: true),
+                                                 arrivalTime: 20,
+                                                 packetInterval: 0.015)
+            expect(frame != nil, "双指报告解析成功")
+            if let f = frame {
+                expectEqual(f.fingerCount, 2, "识别出 2 根手指")
+                expect(f.isMultiTouch, "isMultiTouch 为真")
+                expectEqual(f.samples.count, 0, "多指时 samples 置空（指针冻结）")
+                expectEqual(f.fingers.map { $0.touchID }, [27, 28], "按 touchID 升序输出")
+
+                let a = f.fingers[0]
+                let b = f.fingers[1]
+                expect(abs(a.x - 510.0 / 1920.0) < 0.0002, "手指 A X 正确")
+                expect(abs(a.y - 941.0 / 943.0) < 0.001, "手指 A Y 正确")
+                // B 取最后一个采样（时间最晚的那次）
+                expect(abs(b.x - 1890.0 / 1920.0) < 0.0002, "手指 B 取最新位置 X")
+                expect(abs(b.y - 620.0 / 943.0) < 0.0002, "手指 B 取最新位置 Y")
+            }
+
+            // 单指形态必须仍然走时间序列，不能被误判成多指
+            let single = makeBTReport(events: [
+                makeTouchEvent(prevX: 0, prevY: 0, prevActive: false, prevTouchID: 0,
+                               curX: 1000, curY: 500, curActive: true, curTouchID: 9),
+                makeTouchEvent(prevX: 0, prevY: 0, prevActive: false, prevTouchID: 0,
+                               curX: 1010, curY: 500, curActive: true, curTouchID: 9)
+            ])
+            if let f = DS4TouchParser.parseTouch(payload: single,
+                                                 layout: .bluetoothFull(prefix: true),
+                                                 arrivalTime: 21) {
+                expectEqual(f.fingerCount, 1, "单指只有 1 根手指")
+                expect(!f.isMultiTouch, "单指不标记多指")
+                expectEqual(f.samples.count, 2, "单指保留完整时间序列")
+            } else {
+                expect(false, "单指报告应解析成功")
+            }
+        }
+
+        suite("双指手势：滚动") {
+            let g = TwoFingerGestureRecognizer()
+            // 第一帧只建立基准，不产生任何输出
+            var out = g.ingest([
+                FingerContact(touchID: 1, x: 0.4, y: 0.5, time: 0),
+                FingerContact(touchID: 2, x: 0.6, y: 0.5, time: 0)
+            ])
+            expect(!out.isActive, "第一帧建立基准，无输出")
+
+            // 双指一起向上滑（y 减小），间距不变 → 应为滚动，且方向为负（wheel1 < 0）
+            var totalY: Int32 = 0
+            for i in 1...10 {
+                let y = 0.5 - Double(i) * 0.02
+                out = g.ingest([
+                    FingerContact(touchID: 1, x: 0.4, y: y, time: Double(i) * 0.015),
+                    FingerContact(touchID: 2, x: 0.6, y: y, time: Double(i) * 0.015)
+                ])
+                totalY += out.scrollY
+            }
+            expect(totalY < 0, "双指上滑 → 负向滚动（\(totalY) px）")
+            expect(abs(totalY) > 100, "滚动量级合理（\(abs(totalY)) px）")
+            expectEqual(g.gestureKind, "双指滚动", "识别为滚动")
+
+            // 反转滚动方向
+            let inverted = TwoFingerGestureRecognizer()
+            inverted.config.invertScroll = true
+            _ = inverted.ingest([
+                FingerContact(touchID: 1, x: 0.4, y: 0.5, time: 0),
+                FingerContact(touchID: 2, x: 0.6, y: 0.5, time: 0)
+            ])
+            var invTotal: Int32 = 0
+            for i in 1...10 {
+                let y = 0.5 - Double(i) * 0.02
+                invTotal += inverted.ingest([
+                    FingerContact(touchID: 1, x: 0.4, y: y, time: Double(i) * 0.015),
+                    FingerContact(touchID: 2, x: 0.6, y: y, time: Double(i) * 0.015)
+                ]).scrollY
+            }
+            expect(invTotal > 0, "invertScroll 生效，方向反转（\(invTotal) px）")
+        }
+
+        suite("双指手势：捏合缩放") {
+            let zoomIn = TwoFingerGestureRecognizer()
+            _ = zoomIn.ingest([
+                FingerContact(touchID: 1, x: 0.45, y: 0.5, time: 0),
+                FingerContact(touchID: 2, x: 0.55, y: 0.5, time: 0)
+            ])
+            var steps = 0
+            // 两指张开：间距从 0.1 逐步扩大到 0.6
+            for i in 1...20 {
+                let d = 0.1 + Double(i) * 0.025
+                let out = zoomIn.ingest([
+                    FingerContact(touchID: 1, x: 0.5 - d / 2, y: 0.5, time: Double(i) * 0.015),
+                    FingerContact(touchID: 2, x: 0.5 + d / 2, y: 0.5, time: Double(i) * 0.015)
+                ])
+                steps += out.zoomSteps
+            }
+            expect(steps > 0, "双指张开 → 放大档数（\(steps)）")
+
+            let zoomOut = TwoFingerGestureRecognizer()
+            _ = zoomOut.ingest([
+                FingerContact(touchID: 1, x: 0.2, y: 0.5, time: 0),
+                FingerContact(touchID: 2, x: 0.8, y: 0.5, time: 0)
+            ])
+            var back = 0
+            for i in 1...20 {
+                let d = 0.6 - Double(i) * 0.025
+                let out = zoomOut.ingest([
+                    FingerContact(touchID: 1, x: 0.5 - d / 2, y: 0.5, time: Double(i) * 0.015),
+                    FingerContact(touchID: 2, x: 0.5 + d / 2, y: 0.5, time: Double(i) * 0.015)
+                ])
+                back += out.zoomSteps
+            }
+            expect(back < 0, "双指收拢 → 缩小档数（\(back)）")
+        }
+
+        suite("双指手势：边界与复位") {
+            let g = TwoFingerGestureRecognizer()
+
+            // 单指不应产生任何手势
+            let one = g.ingest([FingerContact(touchID: 1, x: 0.5, y: 0.5, time: 0)])
+            expect(!one.isActive, "单指无手势输出")
+            expectEqual(g.gestureKind, "—", "单指复位为无手势")
+
+            // 换一组手指（touchID 变化）必须重建基准，不能把位移当成手势
+            _ = g.ingest([
+                FingerContact(touchID: 1, x: 0.4, y: 0.5, time: 0),
+                FingerContact(touchID: 2, x: 0.6, y: 0.5, time: 0)
+            ])
+            let switched = g.ingest([
+                FingerContact(touchID: 7, x: 0.1, y: 0.1, time: 0.015),
+                FingerContact(touchID: 8, x: 0.9, y: 0.9, time: 0.015)
+            ])
+            expect(!switched.isActive, "touchID 变化 → 重建基准，输出为零")
+
+            // 关闭开关后完全不输出
+            let off = TwoFingerGestureRecognizer()
+            off.config.isEnabled = false
+            _ = off.ingest([
+                FingerContact(touchID: 1, x: 0.4, y: 0.5, time: 0),
+                FingerContact(touchID: 2, x: 0.6, y: 0.5, time: 0)
+            ])
+            let closed = off.ingest([
+                FingerContact(touchID: 1, x: 0.4, y: 0.1, time: 0.015),
+                FingerContact(touchID: 2, x: 0.6, y: 0.1, time: 0.015)
+            ])
+            expect(!closed.isActive, "开关关闭时不产生手势")
+        }
+
         suite("指针引擎：静止 / 方向 / 死区") {
             let size = CGSize(width: 2560, height: 1080)
 
@@ -732,9 +890,39 @@ let realTouchingBTReport: [UInt8] = [
 func makeFrame(x: Double, y: Double, t: Double) -> TouchpadFrame {
     TouchpadFrame(
         samples: [TouchpadSample(time: t, x: x, y: y, slot: 0, active: true, touchID: 1)],
+        fingers: [FingerContact(touchID: 1, x: x, y: y, time: t)],
         eventCount: 1,
-        fingerCount: 1,
         packetCounter: 0,
         arrivalTime: t
     )
+}
+
+/// 构造双指帧（用于手势识别器测试）
+func makeTwoFingerFrame(idA: Int, xA: Double, yA: Double,
+                        idB: Int, xB: Double, yB: Double,
+                        t: Double) -> TouchpadFrame {
+    TouchpadFrame(
+        samples: [],
+        fingers: [
+            FingerContact(touchID: idA, x: xA, y: yA, time: t),
+            FingerContact(touchID: idB, x: xB, y: yB, time: t)
+        ],
+        eventCount: 1,
+        packetCounter: 0,
+        arrivalTime: t
+    )
+}
+
+/// 构造双指报告：每个事件里触点位 A 与 B 都有效且编号不同。
+/// - A 对应真实固件里的「第一根手指」
+/// - B 对应「第二根手指」
+/// 一包里多个事件 = 多个时间采样。
+func makeTwoFingerBTReport(
+    samples: [(ax: Int, ay: Int, bx: Int, by: Int, idA: UInt8, idB: UInt8)]
+) -> [UInt8] {
+    let events = samples.map { s in
+        makeTouchEvent(prevX: s.ax, prevY: s.ay, prevActive: true, prevTouchID: s.idA,
+                       curX: s.bx, curY: s.by, curActive: true, curTouchID: s.idB)
+    }
+    return makeBTReport(events: events)
 }

@@ -100,8 +100,10 @@ public final class TouchpadPointerEngine {
             return
         }
 
-        // 主指针只取 slot 0（单指操作），多指留给后续手势
-        let primary = frame.samples.filter { $0.slot == 0 && $0.active }
+        // 单指时 frame.samples 已经是按时间排好序的完整序列（一包 3~4 个采样），
+        // 每个采样的 slot 是「本包内第几个事件」，不代表不同手指 —— 全部消费。
+        // 多指时 frame.samples 为空（解析器已置空），走不到这里。
+        let primary = frame.samples.filter { $0.active }
         guard !primary.isEmpty else {
             isTracking = false
             return

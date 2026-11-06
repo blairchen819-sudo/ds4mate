@@ -26,22 +26,28 @@
 //   ⚠️ 蓝牙 0x11 的触摸区比「USB + 2」还要再往后一个字节，实测值见
 //      DS4ReportLayout.touchEventCountOffset / touchEventsOffset（2026-11-06 抓包校准）。
 //
-// 单个触摸事件（9 字节，内含「上一采样」与「当前采样」两个子帧）：
+// 单个触摸事件（9 字节，内含两个触点位）：
 //   [0]     时间戳 uint8（单位约 5.33ms，会回绕）
-//   [1]     prev: bit0-6 = 触点编号, bit7 = 1 表示该槽位未激活（抬起）
-//   [2]     prev X 低 8 位
-//   [3]     prev 混合: 低 4 位 = X bit8-11, 高 4 位 = Y bit8-11
-//   [4]     prev Y 低 8 位
-//   [5]     cur : 同 prev 的编码方式
-//   [6]     cur X 低 8 位
-//   [7]     cur 混合
-//   [8]     cur Y 低 8 位
+//   [1]     触点位 A: bit0-6 = 触点编号, bit7 = 1 表示未激活
+//   [2]     触点位 A X 低 8 位
+//   [3]     触点位 A 混合: 高 4 位 = Y 低 4 位, 低 4 位 = X 高 4 位
+//   [4]     触点位 A Y 高 8 位
+//   [5..8]  触点位 B，编码方式同 A
 //
 //   解码：X = ((mixed & 0x0F) << 8) | xLow
-//         Y = ((mixed & 0xF0) << 4) | yLow      （12 bit，范围 0...1919 / 0...942）
+//         Y = (yHigh << 4) | (mixed >> 4)        （12 bit，范围 0...1919 / 0...942）
 //
-// 「一包多子帧」的真正来源：DS4 内部触摸采样率高于蓝牙报告率，所以每个事件里塞了
-// prev + cur 两个采样点。单指操作时一包能拿到 2 个位置（而非 1 个），这是平滑的基础。
+// ⚠️ 两个触点位的语义**取决于 touchID**（2026-11-06 双指抓包实测）：
+//
+//   单指：B 恒为 `80 00 00 00`（未激活）。一包 3～4 个事件 = 同一根手指的时间序列，
+//         有效采样率 200+ Hz —— 这是指针平滑的物理基础。
+//
+//   双指：A 与 B 同时有效且**编号不同**，代表两根手指在同一时刻的并行位置。
+//         实测样例：A=#27 固定在 (0.266, 0.998)，B=#28 在 (0.995, 0.617) 附近移动，
+//         两者相距 0.7 个板宽，绝不可能是同一根手指的前后帧。
+//
+//   所以「prev / cur」这个命名是不准确的，本项目统一称为「触点位 A / B」，
+//   归属由 touchID 分组决定。
 
 import Foundation
 
@@ -71,27 +77,60 @@ public struct TouchpadSample: Equatable {
     }
 }
 
+/// 一根手指的当前状态（已按 touchID 去重，只保留最新位置）
+public struct FingerContact: Equatable {
+    /// DS4 触点编号（0...127）。同一次按下期间保持稳定，抬起后重新分配。
+    public let touchID: Int
+    /// 归一化坐标 0...1（0 = 左 / 上）
+    public let x: Double
+    public let y: Double
+    /// 该位置对应的采样时刻（单调时钟，秒）
+    public let time: TimeInterval
+
+    public init(touchID: Int, x: Double, y: Double, time: TimeInterval) {
+        self.touchID = touchID
+        self.x = x
+        self.y = y
+        self.time = time
+    }
+}
+
 /// 一包报告解析出的触摸数据
+///
+/// 单指与双指是**两种不同的数据结构**，这是实测确认的（2026-11-06 双指抓包）：
+///
+/// - **单指**：每个 9 字节事件里只有 `cur` 有效，`prev` 恒为 `0x80...`（inactive）。
+///   一包 3~4 个事件 = 同一根手指在时间上先后排列的采样 → 有效采样率 200+ Hz。
+/// - **双指**：同一事件里 `prev` 和 `cur` **都有效且 touchID 不同**，
+///   代表两根手指在同一采样时刻的并行位置，而非同一手指的前后帧。
+///
+/// 所以多指时 `samples` 会置空（指针不动），由 `fingers` 承载并行触点位置。
 public struct TouchpadFrame {
-    /// 按时间升序排列的采样点（含 prev 子帧与 cur 子帧）
+    /// 单指的时间序列采样（时间升序）。**多指时为空**，以避免双指误驱动光标。
     public let samples: [TouchpadSample]
+    /// 当前活跃手指，按 touchID 升序。多指时长度 ≥ 2。
+    public let fingers: [FingerContact]
     /// 报告里声明的触摸事件数
     public let eventCount: Int
-    /// 当前活跃触点数量
-    public let fingerCount: Int
     /// 报告计数器（6 bit，用于检测蓝牙丢包）
     public let packetCounter: UInt8
     /// 本包到达时刻（单调时钟，秒）
     public let arrivalTime: TimeInterval
 
-    public init(samples: [TouchpadSample], eventCount: Int, fingerCount: Int,
-                packetCounter: UInt8, arrivalTime: TimeInterval = 0) {
+    public init(samples: [TouchpadSample], fingers: [FingerContact] = [],
+                eventCount: Int, packetCounter: UInt8, arrivalTime: TimeInterval = 0) {
         self.samples = samples
+        self.fingers = fingers
         self.eventCount = eventCount
-        self.fingerCount = fingerCount
         self.packetCounter = packetCounter
         self.arrivalTime = arrivalTime
     }
+
+    /// 当前活跃触点数量
+    public var fingerCount: Int { fingers.count }
+
+    /// 是否为多指操作（≥2 根手指同时接触）
+    public var isMultiTouch: Bool { fingers.count >= 2 }
 
     public var primary: TouchpadSample? {
         samples.last { $0.slot == 0 && $0.active } ?? samples.last { $0.active }
@@ -239,19 +278,26 @@ public enum DS4TouchParser {
         let eventCount = min(max(declared, 0), min(layout.maxEvents, max(0, maxByBytes)))
         guard eventCount > 0 else {
             // 没有触摸事件：返回空帧（手指已离开），调用方据此收尾
-            return TouchpadFrame(samples: [], eventCount: 0, fingerCount: 0,
+            return TouchpadFrame(samples: [], fingers: [], eventCount: 0,
                                  packetCounter: packetCounter(payload: payload, base: base),
                                  arrivalTime: arrivalTime)
         }
 
-        var samples: [TouchpadSample] = []
-        var activeIDs = Set<Int>()
-
-        // 一包里 eventCount 个事件是**时间上先后排列的采样**，不是多指槽位。
-        // 实测一包 3～4 个事件，蓝牙约 64 包/秒 → 触摸采样率 ≈ 200+ Hz。
-        // 时间分配：把整包展在 [arrival - eventCount*step, arrival] 上，
-        // 保证最后一个采样正好落在到达时刻，前面的按 step 回溯。
+        // 一包里 eventCount 个事件按时间先后排列，均匀铺在最近一个报告间隔内：
+        // 最后一个事件落在到达时刻，前面的按 step 回溯。
+        // 实测一包 3～4 个事件、蓝牙约 64 包/秒 → 单指有效采样率 ≈ 200+ Hz。
         let step = max(packetInterval, 0.001) / Double(max(eventCount, 1))
+
+        /// 从报告里解出的原始采样（尚未决定归属单指序列还是多指触点）
+        struct RawSample {
+            let time: TimeInterval
+            let x: Double
+            let y: Double
+            let touchID: Int
+            let slot: Int
+        }
+
+        var raw: [RawSample] = []
 
         for i in 0..<eventCount {
             let e = eventsStart + i * 9
@@ -265,49 +311,61 @@ public enum DS4TouchParser {
             let prevTouchID = Int(prevID & 0x7F)
             let curTouchID  = Int(curID  & 0x7F)
 
-            // 本事件的时间基准：末个触点落在「该事件的末尾」
+            // 本事件的时间基准
             let curTime = arrivalTime - Double(eventCount - 1 - i) * step
-            let prevTime = curTime - step * 0.5
 
-            // 实测固件只填第一个触点位（第二个 4 字节恒为 `80 00 00 00` = inactive），
-            // 所以只有一个触点有效时，它就是本事件的采样，时间取 curTime；
-            // 两个都有效时才区分 prev / cur 半步。
-            let bothActive = prevActive && curActive
+            // prev 与 cur 同时有效时有两种可能，靠 touchID 区分：
+            //   同一个 ID → 同一根手指的前后双子帧（老式结构，半步长间隔）
+            //   不同 ID   → 两根手指的并行位置（实测的双指形态，同一时刻）
+            let sameFinger = prevActive && curActive && prevTouchID == curTouchID
 
             if prevActive {
                 let p = decode(payload, at: e + 2)
-                samples.append(TouchpadSample(
-                    time: bothActive ? prevTime : curTime,
+                raw.append(RawSample(
+                    time: sameFinger ? curTime - step * 0.5 : curTime,
                     x: Double(p.x) / panelWidth,
                     y: Double(p.y) / panelHeight,
-                    slot: i,
-                    active: true,
-                    touchID: prevTouchID
+                    touchID: prevTouchID,
+                    slot: i
                 ))
-                activeIDs.insert(prevTouchID)
             }
 
             if curActive {
                 let c = decode(payload, at: e + 6)
-                samples.append(TouchpadSample(
+                raw.append(RawSample(
                     time: curTime,
                     x: Double(c.x) / panelWidth,
                     y: Double(c.y) / panelHeight,
-                    slot: i,
-                    active: true,
-                    touchID: curTouchID
+                    touchID: curTouchID,
+                    slot: i
                 ))
-                activeIDs.insert(curTouchID)
             }
         }
 
-        // 采样点排序，保证时间升序（prev 一定早于同事件的 cur）
-        samples.sort { $0.time < $1.time }
+        // 按 touchID 分组：一包内出现几个 ID，就有几根手指同时接触
+        var byID: [Int: [RawSample]] = [:]
+        for s in raw { byID[s.touchID, default: []].append(s) }
+
+        let fingers: [FingerContact] = byID.compactMap { id, list -> FingerContact? in
+            guard let latest = list.max(by: { $0.time < $1.time }) else { return nil }
+            return FingerContact(touchID: id, x: latest.x, y: latest.y, time: latest.time)
+        }.sorted { $0.touchID < $1.touchID }
+
+        // 单指走时间序列（喂给指针引擎）；多指时清空，交给手势层，避免光标被两指拖飞
+        let samples: [TouchpadSample]
+        if fingers.count >= 2 {
+            samples = []
+        } else {
+            samples = raw.sorted { $0.time < $1.time }.map { s in
+                TouchpadSample(time: s.time, x: s.x, y: s.y,
+                               slot: s.slot, active: true, touchID: s.touchID)
+            }
+        }
 
         return TouchpadFrame(
             samples: samples,
+            fingers: fingers,
             eventCount: eventCount,
-            fingerCount: activeIDs.count,
             packetCounter: packetCounter(payload: payload, base: base),
             arrivalTime: arrivalTime
         )

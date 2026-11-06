@@ -91,6 +91,15 @@ final class Stats {
     var printedReports = 0
     private var totalPackets = 0
 
+    // 多指诊断：单包内不同 touchID 的数量，是判断「固件是否支持双指」的唯一硬指标
+    var maxDistinctIDs = 0
+    var seenIDs: Set<Int> = []
+    var multiIDFrames = 0
+    /// 解析器判定为多指的包数（fingers.count >= 2）
+    var multiTouchFrames = 0
+    /// 事件数分布（值 → 出现次数），用于反推固件在双指时是否腾出槽位
+    var eventCountHistogram: [Int: Int] = [:]
+
     func record(reportID: UInt32, length: Int, layout: DS4ReportLayout, frame: TouchpadFrame?) {
         packetsByID[reportID, default: 0] += 1
         lengthsByID[reportID, default: []].insert(length)
@@ -102,8 +111,17 @@ final class Stats {
         if let f = frame {
             touchFrames += 1
             touchSamples += f.samples.count
+            multiTouchFrames += f.isMultiTouch ? 1 : 0
+            eventCountHistogram[f.eventCount, default: 0] += 1
             if let s = f.samples.first { if firstTouchSample == nil { firstTouchSample = s } }
             if let l = f.samples.last { lastTouchSample = l }
+
+            // 手指数以 fingers 为准：多指时解析器会把 samples 置空，
+            // 只统计 samples 就会把双指误判成「没有手指」。
+            let ids = Set(f.fingers.map { $0.touchID })
+            seenIDs.formUnion(ids)
+            maxDistinctIDs = max(maxDistinctIDs, ids.count)
+            if ids.count >= 2 { multiIDFrames += 1 }
         }
         totalPackets += 1
     }
@@ -122,6 +140,23 @@ final class Stats {
                          f.x, f.y, l.x, l.y))
         }
         print("总包数: \(totalPackets)")
+
+        // 多指能力诊断
+        print("")
+        print("多指诊断:")
+        let hist = eventCountHistogram.sorted { $0.key < $1.key }
+            .map { "\($0.key)个事件x\($0.value)" }.joined(separator: "  ")
+        print("  事件数分布: \(hist.isEmpty ? "无" : hist)")
+        print("  出现过的 touchID: \(seenIDs.sorted().map(String.init).joined(separator: ", "))")
+        print("  单包内最多不同 touchID: \(maxDistinctIDs)")
+        print("  疑似多指的包: \(multiIDFrames)（解析器判定多指 \(multiTouchFrames)）")
+        if maxDistinctIDs >= 2 {
+            print("  [OK] 固件支持多指 —— 双指滚动 / 捏合缩放可用")
+        } else if touchFrames > 0 {
+            print("  [!!] 本次每包只有一个 touchID")
+            print("       若这次已经双指按上去，说明固件在蓝牙下只报单点，双指手势需另找数据源")
+            print("       若这次是单指，请双指同时按住再抓一次")
+        }
         if packetsByID[0x11] == nil && packetsByID[0x01] != nil {
             print("")
             print("⚠️  没收到 0x11 完整报告 —— 触摸板坐标不可用。")
@@ -296,16 +331,29 @@ final class Probe {
         print(String(format: "[%6.2fs] id=0x%02X len=%3d %@ | %@",
                      elapsed, reportID, n, head, "\(layout)"))
 
-        // 触摸区原始字节（绝对偏移 32..47），用于肉眼核对事件计数与槽位内容
+        // 触摸区原始字节（绝对偏移 34 起，覆盖全部槽位），用于肉眼核对
         if bytes.count >= 48 {
-            let region = (32..<48).map { String(format: "%02X", bytes[$0]) }.joined(separator: " ")
+            let hi = min(bytes.count, 72)
+            let region = (34..<hi).map { String(format: "%02X", bytes[$0]) }.joined(separator: " ")
             let countByte = frame.map { String(format: "事件数=%d", $0.eventCount) } ?? "—"
-            print("          触摸区[32..47]: \(region)  \(countByte)")
+            print("          触摸区[34..\(hi - 1)]: \(region)  \(countByte)")
         }
 
-        if let f = frame, let p = f.primary {
-            print(String(format: "          触摸: 事件%d 手指%d  slot0=(%.4f, %.4f) 点击数=%d",
-                         f.eventCount, f.fingerCount, p.x, p.y, f.samples.count))
+        if let f = frame, f.fingerCount > 0 {
+            if f.isMultiTouch {
+                // 多指：samples 已被解析器置空，位置在 fingers 里
+                let detail = f.fingers.map { c in
+                    String(format: "#%d(%.3f,%.3f)", c.touchID, c.x, c.y)
+                }.joined(separator: " ")
+                print("          触摸: 事件\(f.eventCount) ★多指\(f.fingerCount) | \(detail)")
+            } else {
+                // 单指：时间序列
+                let detail = f.samples.map { s in
+                    String(format: "s%d#%d%@(%.3f,%.3f)",
+                           s.slot, s.touchID, s.active ? "a" : "-", s.x, s.y)
+                }.joined(separator: " ")
+                print("          触摸: 事件\(f.eventCount) 单指 | \(detail)")
+            }
         }
     }
 }

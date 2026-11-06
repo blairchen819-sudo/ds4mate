@@ -16,11 +16,23 @@ struct SettingsView: View {
     @State private var smoothing = TouchpadMouseService.shared.config.smoothing
     @State private var deadzone = TouchpadMouseService.shared.config.deadzoneSpeed
 
+    // 双指手势
+    @State private var twoFingerEnabled = TouchpadMouseService.shared.gesture.config.isEnabled
+    @State private var scrollScale = TouchpadMouseService.shared.gesture.config.scrollScale
+    @State private var zoomScale = TouchpadMouseService.shared.gesture.config.zoomScale
+    @State private var invertScroll = TouchpadMouseService.shared.gesture.config.invertScroll
+
     private func syncFromService() {
         let c = TouchpadMouseService.shared.config
         sensitivity = c.sensitivity
         smoothing = c.smoothing
         deadzone = c.deadzoneSpeed
+
+        let g = TouchpadMouseService.shared.gesture.config
+        twoFingerEnabled = g.isEnabled
+        scrollScale = g.scrollScale
+        zoomScale = g.zoomScale
+        invertScroll = g.invertScroll
     }
 
     /// 一行「标题 + 当前值 + 滑块」
@@ -99,18 +111,71 @@ struct SettingsView: View {
                               format: "%.1f") {
                         TouchpadMouseService.shared.config.deadzoneSpeed = $0
                     }
+
+                    Divider()
+
+                    Toggle(i18n.t("settings.touchpad.twofinger.toggle"),
+                           isOn: $twoFingerEnabled)
+                        .onChange(of: twoFingerEnabled) { value in
+                            TouchpadMouseService.shared.gesture.config.isEnabled = value
+                            TouchpadMouseService.shared.persistConfig()
+                        }
+
+                    if twoFingerEnabled {
+                        sliderRow(title: i18n.t("settings.touchpad.twofinger.scroll"),
+                                  value: $scrollScale,
+                                  range: 600...6000,
+                                  step: 100,
+                                  format: "%.0f px") {
+                            TouchpadMouseService.shared.gesture.config.scrollScale = $0
+                        }
+                        sliderRow(title: i18n.t("settings.touchpad.twofinger.zoom"),
+                                  value: $zoomScale,
+                                  range: 0.3...3.0,
+                                  step: 0.1,
+                                  format: "%.1f×") {
+                            TouchpadMouseService.shared.gesture.config.zoomScale = $0
+                        }
+                        Toggle(i18n.t("settings.touchpad.twofinger.invert"),
+                               isOn: $invertScroll)
+                            .onChange(of: invertScroll) { value in
+                                TouchpadMouseService.shared.gesture.config.invertScroll = value
+                                TouchpadMouseService.shared.persistConfig()
+                            }
+                        Text(i18n.t("settings.touchpad.twofinger.note"))
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+
+                    Divider()
+
                     Button(i18n.t("settings.touchpad.reset")) {
                         let defaults = PointerConfig()
                         sensitivity = defaults.sensitivity
                         smoothing = defaults.smoothing
                         deadzone = defaults.deadzoneSpeed
                         TouchpadMouseService.shared.config = defaults
+
+                        let g = TwoFingerGestureConfig()
+                        twoFingerEnabled = g.isEnabled
+                        scrollScale = g.scrollScale
+                        zoomScale = g.zoomScale
+                        invertScroll = g.invertScroll
+                        TouchpadMouseService.shared.gesture.config = g
+
                         TouchpadMouseService.shared.persistConfig()
                     }
                     LabeledContent(i18n.t("settings.touchpad.diagnostics")) {
                         Text(controllerService.touchpadDiagnostics)
                             .font(.caption.monospaced())
                             .foregroundStyle(.secondary)
+                    }
+                    if twoFingerEnabled {
+                        LabeledContent(i18n.t("settings.touchpad.twofinger.diagnostics")) {
+                            Text(TouchpadMouseService.shared.gesture.diagnostics)
+                                .font(.caption.monospaced())
+                                .foregroundStyle(.secondary)
+                        }
                     }
                 }
 

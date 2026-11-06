@@ -53,7 +53,14 @@ public final class ControllerService: ObservableObject {
         case .usbFull: layoutText = L("settings.touchpad.layout.usb")
         case .bluetoothFull: layoutText = L("settings.touchpad.layout.bluetooth")
         }
+        // 手指数是判断「双指到底有没有被识别出来」最直接的指标：
+        // 一直显示 0 说明没收到触摸；显示 1 说明固件没给第二根手指；显示 2 才进双指通道。
+        let fingers = hidService.lastTouchFrame?.fingerCount ?? 0
+        let fingerText = fingers == 0
+            ? L("settings.touchpad.fingers.none")
+            : String(format: L("settings.touchpad.fingers.count"), fingers)
         return String(format: L("settings.touchpad.diagnostics"), layoutText, hidService.touchFrameCount)
+            + " · " + fingerText
     }
 
     private var lastLeftTrigger: Float = 0
