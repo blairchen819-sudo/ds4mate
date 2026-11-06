@@ -17,9 +17,14 @@
 //   [7..8]   L2 / R2 模拟
 //   [9..10]  报告时间戳 (uint16 LE)
 //   ...
-//   [32]     触摸事件计数 (uint8)
-//   [33]     未知
-//   [34..]   触摸事件数组，每项 9 字节，USB 最多 3 项 / 蓝牙最多 4 项
+//   [33]     触摸包计数 (uint8)
+//   [34]     触摸事件计数 (uint8)
+//   [35..]   触摸事件数组，每项 9 字节，USB 最多 3 项 / 蓝牙最多 4 项
+//   ...
+//   [最后 4 字节] CRC32
+//
+//   ⚠️ 蓝牙 0x11 的触摸区比「USB + 2」还要再往后一个字节，实测值见
+//      DS4ReportLayout.touchEventCountOffset / touchEventsOffset（2026-11-06 抓包校准）。
 //
 // 单个触摸事件（9 字节，内含「上一采样」与「当前采样」两个子帧）：
 //   [0]     时间戳 uint8（单位约 5.33ms，会回绕）
@@ -116,6 +121,44 @@ public enum DS4ReportLayout: Equatable {
         case .bluetoothFull: return 4
         }
     }
+
+    /// 触摸「事件计数」字节在 payload（已剥离 report ID）内的偏移。
+    ///
+    /// 实测校准（2026-11-06，Mac mini + 蓝牙 DS4 0x09CC，78 字节 0x11 报告）：
+    ///   payload[32] = ?          （恒为 0x00）
+    ///   payload[33] = ?          （恒为 0x00）
+    ///   payload[34] = 事件计数    ← eventCount 在这里
+    ///   payload[35..] = 触摸事件数组，每项 9 字节，4 个槽位
+    ///   payload[73..76] = CRC32
+    ///
+    /// 验证依据：无触摸时 4 个槽位呈现 `00 80 00 00 00 80 00 00 00` 的空闲签名，
+    /// 起点严格落在绝对偏移 36/45/54/63（= payload 35/44/53/62），步长 9。
+    public var touchEventCountOffset: Int {
+        switch self {
+        case .limited: return -1
+        // USB 完整报告沿用社区文档偏移，尚未在本机实测（本机只有蓝牙链路）
+        case .usbFull: return 34
+        case .bluetoothFull(let prefix): return prefix ? 34 : 32
+        }
+    }
+
+    /// 触摸事件数组起始偏移（payload 内）
+    public var touchEventsOffset: Int {
+        switch self {
+        case .limited: return -1
+        case .usbFull: return 35
+        case .bluetoothFull(let prefix): return prefix ? 35 : 33
+        }
+    }
+
+    /// 解析时真正用来定位触摸区的基准偏移
+    public var touchBase: Int {
+        switch self {
+        case .limited: return -1
+        case .usbFull: return 0
+        case .bluetoothFull(let prefix): return prefix ? 2 : 0
+        }
+    }
 }
 
 // MARK: - 未归一化的原始触点
@@ -137,9 +180,9 @@ public enum DS4TouchParser {
     public static let panelWidth: Double = 1920.0
     public static let panelHeight: Double = 943.0
 
-    /// 单包内 prev/cur 两个子帧的默认时间间隔（秒）。
-    /// 实测蓝牙报告间隔 ~10-16ms，DS4 内部采样约 2 倍密度，故取报告间隔的一半。
-    public static let defaultSubframeInterval: TimeInterval = 0.006
+    /// 蓝牙 0x11 报告的平均间隔（秒）。实测 64 包/秒 ≈ 15.5ms。
+    /// 包内每个触摸事件的时间戳由 `packetInterval / eventCount` 推出。
+    public static let defaultPacketInterval: TimeInterval = 0.0155
 
     // MARK: 布局判定
 
@@ -166,11 +209,7 @@ public enum DS4TouchParser {
 
     /// 触摸数据在 payload 内的起始偏移
     static func touchBase(for layout: DS4ReportLayout) -> Int {
-        switch layout {
-        case .limited: return -1
-        case .usbFull: return 0
-        case .bluetoothFull(let prefix): return prefix ? 2 : 0
-        }
+        layout.touchBase
     }
 
     // MARK: 主解析
@@ -180,23 +219,23 @@ public enum DS4TouchParser {
     ///   - payload: 已剥离 report ID 的报告内容
     ///   - layout: 布局（用 `layout(reportID:payload:)` 得到）
     ///   - arrivalTime: 报告到达时刻（单调时钟）
-    ///   - subframeInterval: prev → cur 的时间间隔估计
+    ///   - packetInterval: 相邻两包报告的到达间隔（包内事件会被均匀铺开在这个区间里）
     /// - Returns: 解析结果；布局不支持触摸时返回 nil
     public static func parseTouch(payload: [UInt8],
                                   layout: DS4ReportLayout,
                                   arrivalTime: TimeInterval,
-                                  subframeInterval: TimeInterval = defaultSubframeInterval) -> TouchpadFrame? {
-        guard layout.hasTouchpad else { return nil }
-        let base = touchBase(for: layout)
-        guard base >= 0 else { return nil }
+                                  packetInterval: TimeInterval = defaultPacketInterval) -> TouchpadFrame? {
+        guard layout.hasTouchpad, layout.touchBase >= 0 else { return nil }
+        let base = layout.touchBase
 
-        // 触摸计数在 base + 32，事件数组从 base + 34 开始
-        let countIndex = base + 32
-        guard payload.count > countIndex else { return nil }
+        // 事件计数在 layout.touchEventCountOffset，事件数组从 layout.touchEventsOffset 开始
+        let countIndex = layout.touchEventCountOffset
+        let eventsStart = layout.touchEventsOffset
+        guard countIndex >= 0, eventsStart >= 0, payload.count > countIndex else { return nil }
 
         // 事件数不能超过布局上限，也不能超出实际可用字节（防止越界读脏数据）
         let declared = Int(payload[countIndex])
-        let maxByBytes = (payload.count - (base + 34)) / 9
+        let maxByBytes = (payload.count - eventsStart) / 9
         let eventCount = min(max(declared, 0), min(layout.maxEvents, max(0, maxByBytes)))
         guard eventCount > 0 else {
             // 没有触摸事件：返回空帧（手指已离开），调用方据此收尾
@@ -208,8 +247,14 @@ public enum DS4TouchParser {
         var samples: [TouchpadSample] = []
         var activeIDs = Set<Int>()
 
+        // 一包里 eventCount 个事件是**时间上先后排列的采样**，不是多指槽位。
+        // 实测一包 3～4 个事件，蓝牙约 64 包/秒 → 触摸采样率 ≈ 200+ Hz。
+        // 时间分配：把整包展在 [arrival - eventCount*step, arrival] 上，
+        // 保证最后一个采样正好落在到达时刻，前面的按 step 回溯。
+        let step = max(packetInterval, 0.001) / Double(max(eventCount, 1))
+
         for i in 0..<eventCount {
-            let e = base + 34 + i * 9
+            let e = eventsStart + i * 9
             guard e + 8 < payload.count else { break }
 
             let prevID = payload[e + 1]
@@ -220,23 +265,32 @@ public enum DS4TouchParser {
             let prevTouchID = Int(prevID & 0x7F)
             let curTouchID  = Int(curID  & 0x7F)
 
-            // prev 子帧：只有「上一采样也激活」才有效，否则是刚按下（无历史位置）
+            // 本事件的时间基准：末个触点落在「该事件的末尾」
+            let curTime = arrivalTime - Double(eventCount - 1 - i) * step
+            let prevTime = curTime - step * 0.5
+
+            // 实测固件只填第一个触点位（第二个 4 字节恒为 `80 00 00 00` = inactive），
+            // 所以只有一个触点有效时，它就是本事件的采样，时间取 curTime；
+            // 两个都有效时才区分 prev / cur 半步。
+            let bothActive = prevActive && curActive
+
             if prevActive {
                 let p = decode(payload, at: e + 2)
                 samples.append(TouchpadSample(
-                    time: arrivalTime - subframeInterval,
+                    time: bothActive ? prevTime : curTime,
                     x: Double(p.x) / panelWidth,
                     y: Double(p.y) / panelHeight,
                     slot: i,
                     active: true,
                     touchID: prevTouchID
                 ))
+                activeIDs.insert(prevTouchID)
             }
 
             if curActive {
                 let c = decode(payload, at: e + 6)
                 samples.append(TouchpadSample(
-                    time: arrivalTime,
+                    time: curTime,
                     x: Double(c.x) / panelWidth,
                     y: Double(c.y) / panelHeight,
                     slot: i,
@@ -259,21 +313,32 @@ public enum DS4TouchParser {
         )
     }
 
-    /// 解码一个 4 字节触点（id 字节已跳过，从坐标混合段开始）
+    /// 解码一个 4 字节触点（id 字节已跳过，从 X 低 8 位开始）
+    ///
+    /// 实测字节序（2026-11-06 真机抓包校准）：
+    ///   [0] X 低 8 位
+    ///   [1] 混合字节：高 4 位 = Y 低 4 位，低 4 位 = X 高 4 位
+    ///   [2] Y 高 8 位
+    ///
+    /// ⚠️ 这里踩过坑：Y 的高位在**第 3 个字节**，低位混在第 2 个字节的高半字节。
+    ///    早期实现按「Y 低位在第 3 字节」解析，导致 Y 值溢出到 3.0（面板高度只有 943）。
     /// - Parameter offset: X 低 8 位所在偏移
     static func decode(_ payload: [UInt8], at offset: Int) -> (x: Int, y: Int) {
         guard offset + 2 < payload.count else { return (0, 0) }
         let xLow  = Int(payload[offset])
         let mixed = Int(payload[offset + 1])
-        let yLow  = Int(payload[offset + 2])
+        let yHigh = Int(payload[offset + 2])
         let x = ((mixed & 0x0F) << 8) | xLow
-        let y = ((mixed & 0xF0) << 4) | yLow
+        let y = (yHigh << 4) | (mixed >> 4)
         return (x, y)
     }
 
-    /// 报告计数器（offset 6 的 bit2-7，6 bit），用于检测丢包
+    /// 报告计数器（6 bit），用于检测蓝牙丢包。
+    ///
+    /// 位于「按钮字节组」第 3 个字节的 bit2-7：USB payload[6] / 蓝牙(带前缀) payload[8]。
+    /// 实测：该字节随包递增 0x00 → 0x04 → 0x08 …，即计数器每包 +1。
     static func packetCounter(payload: [UInt8], base: Int) -> UInt8 {
-        let idx = base + 3   // payload[base+3] 对应 USB 布局的 offset 6
+        let idx = base + 6
         guard idx < payload.count else { return 0 }
         return payload[idx] >> 2
     }

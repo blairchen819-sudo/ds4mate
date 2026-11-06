@@ -369,7 +369,7 @@ struct DS4MateTestRunner {
             let frame = DS4TouchParser.parseTouch(payload: payload,
                                                  layout: .usbFull,
                                                  arrivalTime: 100,
-                                                 subframeInterval: 0.006)
+                                                 packetInterval: 0.016)
             expect(frame != nil, "USB 完整报告解析成功")
             if let f = frame {
                 expectEqual(f.eventCount, 1, "事件数 1")
@@ -386,7 +386,8 @@ struct DS4MateTestRunner {
                 if f.samples.count == 2 {
                     let prev = f.samples.first!
                     expect(prev.time < cur.time, "prev 子帧时间早于 cur")
-                    expect(abs((cur.time - prev.time) - 0.006) < 1e-9, "子帧间隔等于传入值")
+                    expect(abs((cur.time - prev.time) - 0.008) < 1e-9,
+                           "同一事件内 prev → cur 相隔半步长（packetInterval/2）")
                     expect(abs(prev.x - 990.0 / 1920.0) < 0.0002, "prev X 解码正确")
                 }
             }
@@ -396,7 +397,7 @@ struct DS4MateTestRunner {
             let ev = makeTouchEvent(prevX: 100, prevY: 90, prevActive: true, prevTouchID: 3,
                                     curX: 1910, curY: 930, curActive: true, curTouchID: 3)
             let payload = makeBTReport(events: [ev])
-            expectEqual(payload.count, 78, "蓝牙报告 78 字节")
+            expectEqual(payload.count, 77, "蓝牙 payload 剥离 report ID 后 77 字节")
             expectEqual(DS4TouchParser.layout(reportID: 0x11, payload: payload),
                         .bluetoothFull(prefix: true), "识别为带前缀的蓝牙报告")
 
@@ -410,15 +411,119 @@ struct DS4MateTestRunner {
             }
         }
 
+        suite("真机抓包样本（触摸区偏移回归）") {
+            let bytes = realIdleBTReport
+            expectEqual(bytes.count, 78, "抓包样本 78 字节（含 report ID）")
+            let payload = Array(bytes[1...])
+            expectEqual(payload.count, 77, "剥离 report ID 后 77 字节")
+            expectEqual(DS4TouchParser.layout(reportID: 0x11, payload: payload),
+                        .bluetoothFull(prefix: true), "识别为带 0xC0 前缀的蓝牙完整报告")
+            expectEqual(DS4ReportLayout.bluetoothFull(prefix: true).touchEventCountOffset, 34,
+                        "事件计数在 payload[34]")
+            expectEqual(DS4ReportLayout.bluetoothFull(prefix: true).touchEventsOffset, 35,
+                        "事件数组从 payload[35] 起")
+
+            // 无手指：事件计数 0，四个槽位是 `00 80 00 00 00 80 00 00 00` 空闲签名
+            if let f = DS4TouchParser.parseTouch(payload: payload,
+                                                 layout: .bluetoothFull(prefix: true),
+                                                 arrivalTime: 1) {
+                expectEqual(f.eventCount, 0, "空闲报告事件数 0")
+                expectEqual(f.samples.count, 0, "空闲报告不产出采样点")
+                expectEqual(Int(f.packetCounter), 0, "包计数器取 payload[8] 的 bit2-7")
+            } else {
+                expect(false, "空闲报告仍应解析成功")
+            }
+
+            // 包计数器随包递增：payload[8] 0x00 → 0x04 → 0x08 对应 0 → 1 → 2
+            var ticked = payload
+            ticked[8] = 0x04
+            if let f = DS4TouchParser.parseTouch(payload: ticked,
+                                                 layout: .bluetoothFull(prefix: true),
+                                                 arrivalTime: 1) {
+                expectEqual(Int(f.packetCounter), 1, "payload[8] 0x04 → 计数器 1")
+            }
+
+            // 在真机形状缓冲区上写入单指按下，验证整条解码链路
+            var pressed = payload
+            pressed[34] = 1
+            let ev = makeTouchEvent(prevX: 1000, prevY: 500, prevActive: true, prevTouchID: 5,
+                                    curX: 1100, curY: 550, curActive: true, curTouchID: 5)
+            for (k, b) in ev.enumerated() { pressed[35 + k] = b }
+
+            if let f = DS4TouchParser.parseTouch(payload: pressed,
+                                                 layout: .bluetoothFull(prefix: true),
+                                                 arrivalTime: 2) {
+                expectEqual(f.eventCount, 1, "改造后事件数 1")
+                expectEqual(f.fingerCount, 1, "活跃触点 1")
+                expectEqual(f.samples.count, 2, "prev + cur 两个子帧")
+                if let cur = f.samples.last {
+                    expect(abs(cur.x - 1100.0 / 1920.0) < 0.0002, "真机缓冲区 X 解码正确")
+                    expect(abs(cur.y - 550.0 / 943.0) < 0.0002, "真机缓冲区 Y 解码正确")
+                }
+                if f.samples.count == 2 {
+                    expect(abs(f.samples[0].x - 1000.0 / 1920.0) < 0.0002, "prev X 解码正确")
+                }
+            } else {
+                expect(false, "改造后的按下报告应解析成功")
+            }
+        }
+
+        suite("真机抓包样本：手指触摸中（坐标解码回归）") {
+            let bytes = realTouchingBTReport
+            expectEqual(bytes.count, 78, "抓包样本 78 字节")
+            expectEqual(bytes[35], 4, "绝对偏移 35 = 触摸事件数 4")
+
+            let payload = Array(bytes[1...])
+            let frame = DS4TouchParser.parseTouch(payload: payload,
+                                                 layout: .bluetoothFull(prefix: true),
+                                                 arrivalTime: 10,
+                                                 packetInterval: 0.016)
+            expect(frame != nil, "触摸报告解析成功")
+            if let f = frame {
+                expectEqual(f.eventCount, 4, "一包 4 个触摸采样")
+                expectEqual(f.samples.count, 4, "4 个采样点（第二触点位恒为 inactive）")
+                expectEqual(f.fingerCount, 1, "单指 → 1 个活跃触点")
+
+                let xs = f.samples.map { Int(($0.x * 1920).rounded()) }
+                let ys = f.samples.map { Int(($0.y * 943).rounded()) }
+                expectEqual(xs, [1267, 1282, 1292, 1303], "X 序列与真机一致且单调递增")
+                expectEqual(ys, [395, 396, 396, 398], "Y 序列与真机一致")
+
+                expect(f.samples.allSatisfy { $0.y < 1.0 }, "Y 归一化不越界（历史 bug 会到 3.0）")
+                expect(f.samples.allSatisfy { $0.touchID == 0 }, "同一根手指 → touchID 恒为 0")
+
+                // 时间：最后一个采样落在到达时刻，整包展在 packetInterval 内
+                if let first = f.samples.first, let last = f.samples.last {
+                    expect(abs(last.time - 10) < 1e-9, "末个采样 = 到达时刻")
+                    expect(abs((last.time - first.time) - 0.012) < 1e-6,
+                           "首末采样相隔 3 × (packetInterval/4)")
+                }
+            }
+        }
+
         suite("DS4 触摸抬起与空帧") {
+            // 第二触点位为空（真机固件常态：恒为 80 00 00 00）→ 每个事件只产出 1 个采样
             let ev = makeTouchEvent(prevX: 500, prevY: 500, prevActive: true, prevTouchID: 2,
                                     curX: 500, curY: 500, curActive: false, curTouchID: 2)
             let payload = makeUSBReport(events: [ev])
             if let f = DS4TouchParser.parseTouch(payload: payload, layout: .usbFull, arrivalTime: 1) {
-                expectEqual(f.samples.count, 1, "手指抬起时只有 prev 有效")
-                expectEqual(f.fingerCount, 0, "无活跃触点")
+                expectEqual(f.samples.count, 1, "第二触点位为空时只产出 1 个采样")
+                expectEqual(f.fingerCount, 1, "第一触点位有效 → 1 个活跃触点")
             } else {
-                expect(false, "抬起帧仍应解析成功")
+                expect(false, "单触点帧仍应解析成功")
+            }
+
+            // 两个触点位都有效 → 同一事件内产出 2 个采样，相隔半个步长
+            let both = makeTouchEvent(prevX: 300, prevY: 300, prevActive: true, prevTouchID: 2,
+                                      curX: 700, curY: 600, curActive: true, curTouchID: 2)
+            let payload2 = makeUSBReport(events: [both])
+            if let f = DS4TouchParser.parseTouch(payload: payload2, layout: .usbFull,
+                                                 arrivalTime: 1, packetInterval: 0.02) {
+                expectEqual(f.samples.count, 2, "双触点位有效 → 2 个采样")
+                if f.samples.count == 2 {
+                    expect(abs((f.samples[1].time - f.samples[0].time) - 0.01) < 1e-9,
+                           "双触点相隔半步长（0.02 / 2）")
+                }
             }
 
             // 事件数为 0：应返回空帧而不是崩溃
@@ -554,16 +659,17 @@ struct DS4MateTestRunner {
 
 // MARK: - 触摸板测试辅助
 
-/// 编码一个触摸事件（9 字节：timestamp + prev 4 字节 + cur 4 字节）
+/// 编码一个触摸事件（9 字节：timestamp + 触点 A 4 字节 + 触点 B 4 字节）
 func makeTouchEvent(prevX: Int, prevY: Int, prevActive: Bool, prevTouchID: UInt8,
                     curX: Int, curY: Int, curActive: Bool, curTouchID: UInt8,
                     timestamp: UInt8 = 0) -> [UInt8] {
+    // 真机字节序：id / X 低 8 位 / (Y 低 4 位 << 4 | X 高 4 位) / Y 高 8 位
     func encode(_ x: Int, _ y: Int, _ active: Bool, _ id: UInt8) -> [UInt8] {
         let idByte = (id & 0x7F) | (active ? 0x00 : 0x80)
         let xLow = UInt8(x & 0xFF)
-        let mixed = UInt8((((y >> 8) & 0x0F) << 4) | ((x >> 8) & 0x0F))
-        let yLow = UInt8(y & 0xFF)
-        return [idByte, xLow, mixed, yLow]
+        let mixed = UInt8(((y & 0x0F) << 4) | ((x >> 8) & 0x0F))
+        let yHigh = UInt8((y >> 4) & 0xFF)
+        return [idByte, xLow, mixed, yHigh]
     }
     var out: [UInt8] = [timestamp]
     out += encode(prevX, prevY, prevActive, prevTouchID)
@@ -575,8 +681,8 @@ func makeTouchEvent(prevX: Int, prevY: Int, prevActive: Bool, prevTouchID: UInt8
 func makeUSBReport(events: [[UInt8]]) -> [UInt8] {
     var p = [UInt8](repeating: 0, count: 64)
     p[0] = 128; p[1] = 128; p[2] = 128; p[3] = 128
-    p[32] = UInt8(min(events.count, 3))
-    var i = 34
+    p[34] = UInt8(min(events.count, 3))
+    var i = 35
     for e in events {
         for b in e {
             if i < 64 { p[i] = b; i += 1 }
@@ -585,19 +691,42 @@ func makeUSBReport(events: [[UInt8]]) -> [UInt8] {
     return p
 }
 
-/// 构造 78 字节蓝牙完整报告（payload 含 0xC0 0x00 前缀）
+/// 构造蓝牙完整报告 payload（77 字节，含 0xC0 0x00 前缀，已剥离 report ID）
+/// 偏移与真机抓包校准结果一致：事件计数 payload[34]，事件数组 payload[35..]
 func makeBTReport(events: [[UInt8]]) -> [UInt8] {
-    var body = [UInt8](repeating: 0, count: 76)
+    var body = [UInt8](repeating: 0, count: 75)
     body[0] = 128; body[1] = 128; body[2] = 128; body[3] = 128
     body[32] = UInt8(min(events.count, 4))
-    var i = 34
+    var i = 33   // payload[35] 对应 body[33]（body 比 payload 少 2 字节前缀）
     for e in events {
         for b in e {
-            if i < 76 { body[i] = b; i += 1 }
+            if i < 75 { body[i] = b; i += 1 }
         }
     }
     return [0xC0, 0x00] + body
 }
+
+/// 真机抓包样本（2026-11-06，Mac mini + 蓝牙 DS4 0x09CC，无手指触摸）
+/// 含 report ID，78 字节。用于锁定触摸区真实偏移，防止后续改动再次错位。
+let realIdleBTReport: [UInt8] = [
+    0x11, 0xC0, 0x00, 0x7D, 0x7E, 0x7F, 0x80, 0x08, 0x00, 0x00, 0x00, 0x00, 0x1E, 0x16, 0xFD, 0x04,
+    0x00, 0x01, 0x00, 0xFE, 0xFF, 0x40, 0x03, 0x38, 0x20, 0xA7, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+    0x09, 0x00, 0x00, 0x00, 0x00, 0x80, 0x00, 0x00, 0x00, 0x80, 0x00, 0x00, 0x00, 0x00, 0x80, 0x00,
+    0x00, 0x00, 0x80, 0x00, 0x00, 0x00, 0x00, 0x80, 0x00, 0x00, 0x00, 0x80, 0x00, 0x00, 0x00, 0x00,
+    0x80, 0x00, 0x00, 0x00, 0x80, 0x00, 0x00, 0x00, 0x00, 0x00, 0xC7, 0xFA, 0x75, 0x97
+]
+
+/// 真机抓包样本 #2（同一台设备，手指正在触摸板上缓慢移动）
+/// 一包 4 个触摸事件，X 应单调递增 1267 → 1282 → 1292 → 1303，Y 稳定在 395~398。
+/// 这份样本钉死了三个易错点：事件起点 payload[35]、包内事件是时间采样而非多指槽位、
+/// 触点 4 字节序为 id / X低 / 混合 / Y高。
+let realTouchingBTReport: [UInt8] = [
+    0x11, 0xC0, 0x00, 0x7D, 0x7E, 0x7F, 0x7F, 0x08, 0x00, 0xC8, 0x00, 0x00, 0x27, 0x88, 0xF7, 0x3D,
+    0x00, 0xF2, 0xFF, 0x04, 0x00, 0x98, 0xFD, 0xCC, 0x01, 0xF8, 0xDE, 0x00, 0x00, 0x00, 0x00, 0x00,
+    0x09, 0x00, 0x00, 0x04, 0xF2, 0x00, 0xF3, 0xB4, 0x18, 0x80, 0x00, 0x00, 0x00, 0xFA, 0x00, 0x02,
+    0xC5, 0x18, 0x80, 0x00, 0x00, 0x00, 0x01, 0x00, 0x0C, 0xC5, 0x18, 0x80, 0x00, 0x00, 0x00, 0x09,
+    0x00, 0x17, 0xE5, 0x18, 0x80, 0x00, 0x00, 0x00, 0x00, 0x00, 0xD9, 0x5E, 0x0A, 0xD6
+]
 
 /// 构造单点单采样的触摸帧
 func makeFrame(x: Double, y: Double, t: Double) -> TouchpadFrame {

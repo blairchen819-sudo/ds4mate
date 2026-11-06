@@ -31,6 +31,10 @@ struct Options {
     var seconds: Double = 15
     var dumpDescriptor = true
     var verboseDescriptor = false
+    /// 转储前 N 包完整 hex（0 = 不转储）
+    var hexDump = 0
+    /// 仅在检测到触摸（绝对偏移 35 非 0）时转储前 N 包完整 hex
+    var hexTouch = 0
 }
 
 func parseArgs() -> Options {
@@ -46,6 +50,12 @@ func parseArgs() -> Options {
             if i < a.count, let v = Double(a[i]) { o.seconds = v }
         case "--no-descriptor": o.dumpDescriptor = false
         case "--verbose-descriptor": o.verboseDescriptor = true
+        case "--hex":
+            i += 1
+            if i < a.count, let v = Int(a[i]) { o.hexDump = v }
+        case "--hex-touch":
+            i += 1
+            if i < a.count, let v = Int(a[i]) { o.hexTouch = v }
         case "-h", "--help":
             print("""
             用法: ds4-probe [--seize] [--no-getreport] [--seconds N] [--no-descriptor]
@@ -54,6 +64,8 @@ func parseArgs() -> Options {
               --no-getreport   不发 GET_REPORT(0x02)，观察 DS4 默认档位
               --seconds N      采集时长，默认 15 秒
               --no-descriptor  不打印 report descriptor
+              --hex N          转储前 N 包完整 hex（定位触摸区偏移用）
+              --hex-touch N    检测到触摸时转储 N 包完整 hex
             """)
             exit(0)
         default:
@@ -243,6 +255,7 @@ final class Probe {
     }
 
     private var lastPrint = Date.distantPast
+    private var hexDumped = 0
 
     func handle(reportID: UInt32, report: UnsafeMutablePointer<UInt8>, length: CFIndex) {
         let n = Int(length)
@@ -263,9 +276,32 @@ final class Probe {
         guard shouldPrint else { return }
         lastPrint = Date()
 
+        // 全量 hex 转储：用于人工核对触摸区真实偏移
+        let touching = bytes.count > 35 && bytes[35] != 0
+        let wantHex = (options.hexDump > 0 && hexDumped < options.hexDump)
+            || (options.hexTouch > 0 && touching && hexDumped < options.hexTouch)
+        if wantHex && reportID == 0x11 {
+            hexDumped += 1
+            print("")
+            print("──── hex 转储 #\(hexDumped) (len=\(n)) ────")
+            for row in stride(from: 0, to: n, by: 16) {
+                let end = min(row + 16, n)
+                let hex = (row..<end).map { String(format: "%02X", bytes[$0]) }.joined(separator: " ")
+                print(String(format: "  %3d | %@", row, hex))
+            }
+            print("")
+        }
+
         let head = bytes.prefix(12).map { String(format: "%02X", $0) }.joined(separator: " ")
         print(String(format: "[%6.2fs] id=0x%02X len=%3d %@ | %@",
                      elapsed, reportID, n, head, "\(layout)"))
+
+        // 触摸区原始字节（绝对偏移 32..47），用于肉眼核对事件计数与槽位内容
+        if bytes.count >= 48 {
+            let region = (32..<48).map { String(format: "%02X", bytes[$0]) }.joined(separator: " ")
+            let countByte = frame.map { String(format: "事件数=%d", $0.eventCount) } ?? "—"
+            print("          触摸区[32..47]: \(region)  \(countByte)")
+        }
 
         if let f = frame, let p = f.primary {
             print(String(format: "          触摸: 事件%d 手指%d  slot0=(%.4f, %.4f) 点击数=%d",

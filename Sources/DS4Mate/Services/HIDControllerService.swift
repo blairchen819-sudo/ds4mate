@@ -385,13 +385,13 @@ public final class HIDControllerService {
 
         // 触摸板：只有完整报告才带坐标
         if layout.hasTouchpad {
-            let subframe = reportIntervalEMA > 0
-                ? min(max(reportIntervalEMA * 0.5, 0.002), 0.02)
-                : DS4TouchParser.defaultSubframeInterval
+            let packetInterval = reportIntervalEMA > 0
+                ? min(max(reportIntervalEMA, 0.004), 0.05)
+                : DS4TouchParser.defaultPacketInterval
             if let frame = DS4TouchParser.parseTouch(payload: payload,
                                                     layout: layout,
                                                     arrivalTime: uptime,
-                                                    subframeInterval: subframe) {
+                                                    packetInterval: packetInterval) {
                 touchFrameCount += 1
                 lastTouchFrame = frame
                 onTouch?(frame)
