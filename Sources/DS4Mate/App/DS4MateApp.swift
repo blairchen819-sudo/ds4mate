@@ -185,13 +185,11 @@ struct DS4MateApp: App {
         .defaultSize(width: 880, height: 640)
         .windowResizability(.contentMinSize)
 
-        // 设置窗口
-        Settings {
-            SettingsView()
-                .environmentObject(appState)
-                .environmentObject(controllerService)
-                .environmentObject(permissionMonitor)
-                .frame(minWidth: 480, minHeight: 360)
-        }
+        // 设置窗口：**不用** SwiftUI 的 `Settings { }` scene。
+        // 本 App 是 LSUIElement 纯菜单栏应用，没有常规应用菜单条，SwiftUI
+        // 不会为该 scene 注册 showSettingsWindow: 的响应者，sendAction 静默失败，
+        // 表现为「点设置没反应」。改由 SettingsWindowController 自己持有 NSWindow，
+        // 入口在菜单栏面板的「设置」按钮。
+        // 注意：⌘, 在 LSUIElement 下同样不可用，属预期行为。
     }
 }

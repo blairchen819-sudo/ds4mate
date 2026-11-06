@@ -311,10 +311,14 @@ struct MenuBarContent: View {
     /// 菜单栏 App（LSUIElement）没有常规应用菜单，⌘, 在无主窗口时按不到，
     /// 所以显式触发 SwiftUI 为 Settings scene 注册的 responder action。
     private func openSettingsWindow() {
-        NSApp.activate(ignoringOtherApps: true)
-        // macOS 14+ 是 showSettingsWindow:，13 及更早是 showPreferencesWindow:
-        if !NSApp.sendAction(Selector(("showSettingsWindow:")), to: nil, from: nil) {
-            NSApp.sendAction(Selector(("showPreferencesWindow:")), to: nil, from: nil)
-        }
+        // 注意：这里**不能**用 NSApp.sendAction(showSettingsWindow:)。
+        // 本 App 是 LSUIElement 菜单栏应用，SwiftUI 不会为 Settings scene
+        // 注册该 selector 的响应者，sendAction 会静默返回 false —— 表现为
+        // 「点设置毫无反应」。改由 SettingsWindowController 自己持有窗口。
+        SettingsWindowController.shared.show(
+            appState: appState,
+            controllerService: controllerService,
+            permissionMonitor: permissionMonitor
+        )
     }
 }
