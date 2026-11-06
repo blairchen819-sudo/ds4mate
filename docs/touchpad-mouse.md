@@ -102,6 +102,14 @@ CGEvent(.mouseMoved) → .cghidEventTap
 
 ## 三、怎么验证（第一次上手必做）
 
+**功能入口在哪**：菜单栏的 DS4Mate 手柄图标 → 下拉面板底部的「设置」（齿轮）→
+「通用」标签页 → 第二个分区「触摸板」，打开「触摸板当鼠标」。打开后才会展开
+灵敏度 / 平滑度 / 死区三个滑块和报告模式诊断行。
+
+> 本 App 是 `LSUIElement` 纯菜单栏应用，`⌘,` 打不开设置（没有常规应用菜单条），
+> 只能从菜单栏面板进；窗口由 `SettingsWindowController` 自己持有，不走 SwiftUI 的
+> `Settings { }` scene。
+
 **链路已于 2026-11-06 在本机实测跑通**（Mac mini / macOS 26 / 蓝牙 DS4 `0x09CC`）：
 
 - `GET_REPORT(feature 0x02)` 返回 `0x00000000`，37 字节校准数据

@@ -10,6 +10,7 @@
 > - **收敛记录（2026-10-20）**：上述分歧已通过新增 ADR-008（控制器框架改为 IOHIDManager）、ADR-009（工程结构改为 SwiftPM）并补录 PRD §4.5（附加功能）得到修正；ADR-003 与 ADR-006 标记为 Superseded。
 > - **预设模型变更（2026-11-03）**：应用已删除内置的「默认 / 媒体遥控 / 演示」三套固定预设，全部预设改为用户自建；目录为空时自动生成一份初始预设。SPEC §6.5 已同步为初始预设表；PRD / architecture 中的「三套预设」表述保留为历史规划记录。
 > - **触摸板认知纠正（2026-11-06）**：早期代码注释把「只收到 10 字节精简 0x01 报告」归因于 macOS 限制。实际是 Sony 固件默认档位——发一次 `GET_REPORT(feature 0x02)` 即可切到完整 0x11 报告（含触摸板）。详见 `touchpad-mouse.md` 第一节。
+> - **设置窗口实现变更（2026-11-06）**：App 在 `Info.plist` 里 `LSUIElement = true`，是纯菜单栏应用、没有常规应用菜单条。SwiftUI 在这种场景下**不会**为 `Settings { }` scene 注册 `showSettingsWindow:` 的响应者，`NSApp.sendAction` 静默返回 `false` —— 表现是「点菜单栏里的设置毫无反应」。已改为 `SettingsWindowController` 自持 NSWindow + NSHostingController。`design-system/settings.md` 的布局描述仍然有效，但入口不再经过 SwiftUI 的 Settings scene，`⌘,` 在 LSUIElement 下不可用属预期。
 
 ## 文档导航
 
