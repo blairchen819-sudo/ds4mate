@@ -45,6 +45,17 @@ public final class ControllerService: ObservableObject {
     /// 不需要等下一次状态变化。
     public var hidStatus: String { hidService.statusMessage }
 
+    /// 触摸板诊断信息（设置页展示，用于排查「开关开了却没反应」）
+    public var touchpadDiagnostics: String {
+        let layoutText: String
+        switch hidService.reportLayout {
+        case .limited: layoutText = L("settings.touchpad.layout.limited")
+        case .usbFull: layoutText = L("settings.touchpad.layout.usb")
+        case .bluetoothFull: layoutText = L("settings.touchpad.layout.bluetooth")
+        }
+        return String(format: L("settings.touchpad.diagnostics"), layoutText, hidService.touchFrameCount)
+    }
+
     private var lastLeftTrigger: Float = 0
     private var lastRightTrigger: Float = 0
     private var dragModeActive: Bool = false
@@ -94,12 +105,21 @@ public final class ControllerService: ObservableObject {
             onAxis: { [weak self] input, value in
                 self?.handleAxis(input, value: value)
             },
+            onTouch: { [weak self] frame in
+                self?.handleTouch(frame)
+            },
             onStats: { [weak self] count in
                 DispatchQueue.main.async {
                     self?.hidReportCount = count
                 }
             }
         )
+
+        // 上次退出时若开着「触摸板当鼠标」，这里恢复运行
+        if TouchpadMouseService.shared.isEnabled {
+            TouchpadMouseService.shared.loadPersistedConfig()
+            TouchpadMouseService.shared.start()
+        }
 
         // 60Hz 平滑输出：HID 只有 ~12Hz，靠这个定时器把速度积分成平滑位移
         Timer.scheduledTimer(withTimeInterval: 1.0 / 60.0, repeats: true) { [weak self] _ in
@@ -134,6 +154,7 @@ public final class ControllerService: ObservableObject {
                     // 手柄断开时松开模拟中的修饰键，否则松开事件永远等不到
                     if case .connected = self.connectionState {
                         self.eventSynthesizer.releaseAllModifiers()
+                        TouchpadMouseService.shared.engine.reset()
                     }
                     self.connectionState = newState
                 }
@@ -179,12 +200,30 @@ public final class ControllerService: ObservableObject {
 
     // MARK: - 按键处理
 
+    // MARK: - 触摸板
+
+    /// 收到一包触摸数据（含 prev / cur 两个子帧）。
+    /// 只有「触摸板当鼠标」开启时才驱动指针；关闭时完全不影响原有映射。
+    private func handleTouch(_ frame: TouchpadFrame) {
+        guard isEnabled, TouchpadMouseService.shared.isEnabled else { return }
+        TouchpadMouseService.shared.ingest(frame)
+    }
+
     private func handleButton(_ input: ControllerInput, pressed: Bool) {
         NSLog("[DS4Mate] handleButton \(input.displayName) pressed=\(pressed) enabled=\(isEnabled) profile=\(activeProfile?.name ?? "nil")")
         DispatchQueue.main.async {
             self.lastInput = (input, Date())
         }
         guard isEnabled else { return }
+
+        // 触摸板当鼠标模式：触摸板按下 = 鼠标左键，并且不再走原有映射
+        // （否则会同时触发「调度中心」之类，变成一次点击两个动作）
+        if input == .touchpadButton && TouchpadMouseService.shared.isEnabled {
+            eventStream.send(pressed ? .buttonDown(input) : .buttonUp(input))
+            TouchpadMouseService.shared.setPressed(pressed)
+            eventSynthesizer.mouseButton(pressed ? .leftMouseDown : .leftMouseUp, button: .left)
+            return
+        }
 
         // 全局「切换预设」键优先于当前 Profile 的绑定：
         // 这样不论当前是哪套预设，按同一个键都能切到下一套。

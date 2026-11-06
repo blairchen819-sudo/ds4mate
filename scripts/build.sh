@@ -55,6 +55,8 @@ xcrun swiftc \
   Sources/DS4Mate/Models/ShortcutCatalog.swift \
   Sources/DS4Mate/Models/Profile.swift \
   Sources/DS4Mate/Services/ProfileStore.swift \
+  Sources/DS4Mate/Services/DS4TouchParser.swift \
+  Sources/DS4Mate/Services/TouchpadPointerEngine.swift \
   Tests/RunTests.swift
 
 # 4. 组装 .app bundle

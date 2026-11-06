@@ -338,6 +338,202 @@ struct DS4MateTestRunner {
         }
 
         // =====================================================
+        // 触摸板 → 指针
+        // =====================================================
+
+        suite("DS4 报告布局判定") {
+            let short = [UInt8](repeating: 0, count: 9)
+            let usb = [UInt8](repeating: 0, count: 64)
+            let bt = [UInt8](repeating: 0, count: 78)
+            var btPrefix = bt; btPrefix[0] = 0xC0
+
+            expectEqual(DS4TouchParser.layout(reportID: 0x01, payload: short), .limited,
+                        "9 字节 0x01 → 精简档位（无触摸板）")
+            expect(!DS4TouchParser.layout(reportID: 0x01, payload: short).hasTouchpad,
+                   "精简档位不声明触摸板")
+            expectEqual(DS4TouchParser.layout(reportID: 0x01, payload: usb), .usbFull,
+                        "64 字节 0x01 → USB 完整报告")
+            expectEqual(DS4TouchParser.layout(reportID: 0x11, payload: bt), .bluetoothFull(prefix: false),
+                        "78 字节 0x11 → 蓝牙完整报告")
+            expectEqual(DS4TouchParser.layout(reportID: 0x11, payload: btPrefix), .bluetoothFull(prefix: true),
+                        "首字节 0xC0 → 识别 Sony 私有前缀")
+            expectEqual(DS4ReportLayout.bluetoothFull(prefix: true).maxEvents, 4,
+                        "蓝牙最多 4 个触摸事件")
+            expectEqual(DS4ReportLayout.usbFull.maxEvents, 3, "USB 最多 3 个触摸事件")
+        }
+
+        suite("DS4 触摸坐标解码与多子帧") {
+            let ev = makeTouchEvent(prevX: 990, prevY: 460, prevActive: true, prevTouchID: 1,
+                                    curX: 1000, curY: 500, curActive: true, curTouchID: 1)
+            let payload = makeUSBReport(events: [ev])
+            let frame = DS4TouchParser.parseTouch(payload: payload,
+                                                 layout: .usbFull,
+                                                 arrivalTime: 100,
+                                                 subframeInterval: 0.006)
+            expect(frame != nil, "USB 完整报告解析成功")
+            if let f = frame {
+                expectEqual(f.eventCount, 1, "事件数 1")
+                expectEqual(f.fingerCount, 1, "活跃触点 1")
+                expectEqual(f.samples.count, 2, "一包产生 2 个子帧（prev + cur）")
+                expectEqual(f.arrivalTime, 100, "到达时间透传")
+
+                let cur = f.samples.last!
+                expect(abs(cur.x - 1000.0 / 1920.0) < 0.0002,
+                       "X 解码正确（1000 → \(String(format: "%.4f", cur.x))）")
+                expect(abs(cur.y - 500.0 / 943.0) < 0.0002,
+                       "Y 解码正确（500 → \(String(format: "%.4f", cur.y))）")
+
+                if f.samples.count == 2 {
+                    let prev = f.samples.first!
+                    expect(prev.time < cur.time, "prev 子帧时间早于 cur")
+                    expect(abs((cur.time - prev.time) - 0.006) < 1e-9, "子帧间隔等于传入值")
+                    expect(abs(prev.x - 990.0 / 1920.0) < 0.0002, "prev X 解码正确")
+                }
+            }
+        }
+
+        suite("DS4 蓝牙报告（含 0xC0 前缀）") {
+            let ev = makeTouchEvent(prevX: 100, prevY: 90, prevActive: true, prevTouchID: 3,
+                                    curX: 1910, curY: 930, curActive: true, curTouchID: 3)
+            let payload = makeBTReport(events: [ev])
+            expectEqual(payload.count, 78, "蓝牙报告 78 字节")
+            expectEqual(DS4TouchParser.layout(reportID: 0x11, payload: payload),
+                        .bluetoothFull(prefix: true), "识别为带前缀的蓝牙报告")
+
+            let frame = DS4TouchParser.parseTouch(payload: payload,
+                                                 layout: .bluetoothFull(prefix: true),
+                                                 arrivalTime: 5)
+            expect(frame != nil, "蓝牙报告解析成功")
+            if let f = frame, let cur = f.samples.last {
+                expect(abs(cur.x - 1910.0 / 1920.0) < 0.0002, "12bit X 上限正确（1910）")
+                expect(abs(cur.y - 930.0 / 943.0) < 0.0002, "12bit Y 上限正确（930）")
+            }
+        }
+
+        suite("DS4 触摸抬起与空帧") {
+            let ev = makeTouchEvent(prevX: 500, prevY: 500, prevActive: true, prevTouchID: 2,
+                                    curX: 500, curY: 500, curActive: false, curTouchID: 2)
+            let payload = makeUSBReport(events: [ev])
+            if let f = DS4TouchParser.parseTouch(payload: payload, layout: .usbFull, arrivalTime: 1) {
+                expectEqual(f.samples.count, 1, "手指抬起时只有 prev 有效")
+                expectEqual(f.fingerCount, 0, "无活跃触点")
+            } else {
+                expect(false, "抬起帧仍应解析成功")
+            }
+
+            // 事件数为 0：应返回空帧而不是崩溃
+            let empty = makeUSBReport(events: [])
+            if let f = DS4TouchParser.parseTouch(payload: empty, layout: .usbFull, arrivalTime: 1) {
+                expectEqual(f.samples.count, 0, "零事件返回空帧")
+            } else {
+                expect(false, "零事件应返回空帧")
+            }
+
+            // 精简报告：没有触摸数据
+            let limited = [UInt8](repeating: 0, count: 9)
+            expect(DS4TouchParser.parseTouch(payload: limited, layout: .limited, arrivalTime: 1) == nil,
+                   "精简报告不产出触摸帧")
+        }
+
+        suite("DS4 CRC32") {
+            let vector: [UInt8] = Array("123456789".utf8)
+            expectEqual(DS4CRC32.compute(vector[...]), 0xCBF43926, "标准测试向量 CRC-32")
+            let empty: [UInt8] = []
+            expectEqual(DS4CRC32.compute(empty[...]), 0, "空输入 CRC 为 0")
+        }
+
+        suite("指针引擎：静止 / 方向 / 死区") {
+            let size = CGSize(width: 2560, height: 1080)
+
+            // 静止：位置不变，不应该产生任何位移
+            let still = TouchpadPointerEngine()
+            for i in 0..<6 {
+                let t = Double(i) * 0.012
+                still.ingest(makeFrame(x: 0.5, y: 0.5, t: t), arrivalTime: t)
+            }
+            var stillTotal = 0.0
+            for i in 0..<40 {
+                let d = still.tick(now: 0.1 + Double(i) / 240.0, screenSize: size)
+                stillTotal += abs(d.dx) + abs(d.dy)
+            }
+            expect(stillTotal < 1.0, "静止时位移为零（实际 \(String(format: "%.3f", stillTotal))）")
+
+            // 向右滑动：累计位移必须为正且量级合理
+            let right = TouchpadPointerEngine()
+            var rightTotal = 0.0
+            for i in 0..<40 {
+                let t = 1.0 + Double(i) * 0.012
+                let x = 0.20 + Double(i) * 0.015
+                right.ingest(makeFrame(x: x, y: 0.5, t: t), arrivalTime: t)
+                for k in 0..<3 {
+                    rightTotal += right.tick(now: t + Double(k) / 240.0, screenSize: size).dx
+                }
+            }
+            expect(rightTotal > 100, "向右滑动产生正位移（\(Int(rightTotal)) pt）")
+
+            // 向左滑动：方向相反
+            let left = TouchpadPointerEngine()
+            var leftTotal = 0.0
+            for i in 0..<40 {
+                let t = 1.0 + Double(i) * 0.012
+                left.ingest(makeFrame(x: 0.80 - Double(i) * 0.015, y: 0.5, t: t), arrivalTime: t)
+                for k in 0..<3 {
+                    leftTotal += left.tick(now: t + Double(k) / 240.0, screenSize: size).dx
+                }
+            }
+            expect(leftTotal < -100, "向左滑动产生负位移（\(Int(leftTotal)) pt）")
+            expect(abs(rightTotal + leftTotal) < rightTotal * 0.15,
+                   "左右对称（右 \(Int(rightTotal)) / 左 \(Int(-leftTotal))）")
+
+            // 死区：极慢的漂移应被吞掉
+            let drifting = TouchpadPointerEngine()
+            drifting.config.deadzoneSpeed = 30
+            var driftTotal = 0.0
+            for i in 0..<60 {
+                let t = 1.0 + Double(i) * 0.012
+                drifting.ingest(makeFrame(x: 0.5 + Double(i) * 0.00002, y: 0.5, t: t), arrivalTime: t)
+                for k in 0..<3 {
+                    driftTotal += abs(drifting.tick(now: t + Double(k) / 240.0, screenSize: size).dx)
+                }
+            }
+            expect(driftTotal < 5.0, "低速漂移被死区吃掉（\(String(format: "%.2f", driftTotal)) pt）")
+        }
+
+        suite("指针引擎：冻结与重置") {
+            let size = CGSize(width: 1920, height: 1080)
+            let engine = TouchpadPointerEngine()
+            for i in 0..<30 {
+                let t = 1.0 + Double(i) * 0.012
+                engine.ingest(makeFrame(x: 0.2 + Double(i) * 0.02, y: 0.5, t: t), arrivalTime: t)
+                for k in 0..<3 { _ = engine.tick(now: t + Double(k) / 240.0, screenSize: size) }
+            }
+            expect(engine.isTracking, "滑动中处于追踪状态")
+
+            engine.isFrozen = true
+            var frozenMovement = 0.0
+            for i in 0..<20 {
+                let t = 2.0 + Double(i) * 0.012
+                engine.ingest(makeFrame(x: 0.7, y: 0.3, t: t), arrivalTime: t)
+                frozenMovement += abs(engine.tick(now: t, screenSize: size).dx)
+            }
+            expect(frozenMovement == 0, "冻结时不产生位移")
+
+            engine.isFrozen = false
+            engine.reset()
+            expect(!engine.isTracking, "reset 后退出追踪状态")
+            expectEqual(engine.estimatedSpeed, 0, "reset 后速度归零")
+        }
+
+        suite("指针引擎：配置边界") {
+            let e = TouchpadPointerEngine()
+            expectEqual(e.config.sensitivity, PointerConfig().sensitivity, "默认灵敏度")
+            e.config.smoothing = 1.0
+            e.config.deadzoneSpeed = 0
+            expect(e.config.smoothing <= 1.0, "平滑系数在合法范围")
+            expect(e.config.maxStepPerTick > 0, "单 tick 上限为正")
+        }
+
+        // =====================================================
         // Final
         // =====================================================
         print("")
@@ -354,4 +550,62 @@ struct DS4MateTestRunner {
             exit(1)
         }
     }
+}
+
+// MARK: - 触摸板测试辅助
+
+/// 编码一个触摸事件（9 字节：timestamp + prev 4 字节 + cur 4 字节）
+func makeTouchEvent(prevX: Int, prevY: Int, prevActive: Bool, prevTouchID: UInt8,
+                    curX: Int, curY: Int, curActive: Bool, curTouchID: UInt8,
+                    timestamp: UInt8 = 0) -> [UInt8] {
+    func encode(_ x: Int, _ y: Int, _ active: Bool, _ id: UInt8) -> [UInt8] {
+        let idByte = (id & 0x7F) | (active ? 0x00 : 0x80)
+        let xLow = UInt8(x & 0xFF)
+        let mixed = UInt8((((y >> 8) & 0x0F) << 4) | ((x >> 8) & 0x0F))
+        let yLow = UInt8(y & 0xFF)
+        return [idByte, xLow, mixed, yLow]
+    }
+    var out: [UInt8] = [timestamp]
+    out += encode(prevX, prevY, prevActive, prevTouchID)
+    out += encode(curX, curY, curActive, curTouchID)
+    return out
+}
+
+/// 构造 64 字节 USB 完整报告（payload 不含 report ID）
+func makeUSBReport(events: [[UInt8]]) -> [UInt8] {
+    var p = [UInt8](repeating: 0, count: 64)
+    p[0] = 128; p[1] = 128; p[2] = 128; p[3] = 128
+    p[32] = UInt8(min(events.count, 3))
+    var i = 34
+    for e in events {
+        for b in e {
+            if i < 64 { p[i] = b; i += 1 }
+        }
+    }
+    return p
+}
+
+/// 构造 78 字节蓝牙完整报告（payload 含 0xC0 0x00 前缀）
+func makeBTReport(events: [[UInt8]]) -> [UInt8] {
+    var body = [UInt8](repeating: 0, count: 76)
+    body[0] = 128; body[1] = 128; body[2] = 128; body[3] = 128
+    body[32] = UInt8(min(events.count, 4))
+    var i = 34
+    for e in events {
+        for b in e {
+            if i < 76 { body[i] = b; i += 1 }
+        }
+    }
+    return [0xC0, 0x00] + body
+}
+
+/// 构造单点单采样的触摸帧
+func makeFrame(x: Double, y: Double, t: Double) -> TouchpadFrame {
+    TouchpadFrame(
+        samples: [TouchpadSample(time: t, x: x, y: y, slot: 0, active: true, touchID: 1)],
+        eventCount: 1,
+        fingerCount: 1,
+        packetCounter: 0,
+        arrivalTime: t
+    )
 }

@@ -9,6 +9,7 @@
 > - **千问语音控制 / 桌面切换**：这两项实际已实现（见 `QwenVoiceController.swift` / `SpaceSwitcher.swift`），但规划文档未覆盖。
 > - **收敛记录（2026-10-20）**：上述分歧已通过新增 ADR-008（控制器框架改为 IOHIDManager）、ADR-009（工程结构改为 SwiftPM）并补录 PRD §4.5（附加功能）得到修正；ADR-003 与 ADR-006 标记为 Superseded。
 > - **预设模型变更（2026-11-03）**：应用已删除内置的「默认 / 媒体遥控 / 演示」三套固定预设，全部预设改为用户自建；目录为空时自动生成一份初始预设。SPEC §6.5 已同步为初始预设表；PRD / architecture 中的「三套预设」表述保留为历史规划记录。
+> - **触摸板认知纠正（2026-11-06）**：早期代码注释把「只收到 10 字节精简 0x01 报告」归因于 macOS 限制。实际是 Sony 固件默认档位——发一次 `GET_REPORT(feature 0x02)` 即可切到完整 0x11 报告（含触摸板）。详见 `touchpad-mouse.md` 第一节。
 
 ## 文档导航
 
@@ -23,6 +24,7 @@
 | `design-system/` | 设计系统：`MASTER.md` + 6 个页面范式（menu / editor / settings / onboarding / profiles / action-picker） |
 | `design-tokens.json` | W3C 标准设计 Token |
 | `research/PRD-v0.1.md` | 产品需求文档（背景、竞品、目标用户、MVP 范围） |
+| `touchpad-mouse.md` | 触摸板当鼠标：三个常见认知偏差的纠正、数据链路、探针验证方法、手感调参、限制与 DriverKit 迁移路径 |
 
 ## 外部参考
 

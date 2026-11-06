@@ -10,6 +10,45 @@ struct SettingsView: View {
 
     @State private var showingResetConfirm = false
 
+    // 触摸板手感参数（@State 让滑块即时响应；真正的值写回 TouchpadMouseService）
+    @State private var touchpadEnabled = TouchpadMouseService.shared.isEnabled
+    @State private var sensitivity = TouchpadMouseService.shared.config.sensitivity
+    @State private var smoothing = TouchpadMouseService.shared.config.smoothing
+    @State private var deadzone = TouchpadMouseService.shared.config.deadzoneSpeed
+
+    private func syncFromService() {
+        let c = TouchpadMouseService.shared.config
+        sensitivity = c.sensitivity
+        smoothing = c.smoothing
+        deadzone = c.deadzoneSpeed
+    }
+
+    /// 一行「标题 + 当前值 + 滑块」
+    private func sliderRow(title: String,
+                           value: Binding<Double>,
+                           range: ClosedRange<Double>,
+                           step: Double,
+                           format: String,
+                           apply: @escaping (Double) -> Void) -> some View {
+        VStack(alignment: .leading, spacing: 2) {
+            HStack {
+                Text(title)
+                Spacer()
+                Text(String(format: format, value.wrappedValue))
+                    .font(.caption.monospaced())
+                    .foregroundStyle(.secondary)
+            }
+            Slider(value: Binding(
+                get: { value.wrappedValue },
+                set: { newValue in
+                    value.wrappedValue = newValue
+                    apply(newValue)
+                    TouchpadMouseService.shared.persistConfig()
+                }
+            ), in: range, step: step)
+        }
+    }
+
     var body: some View {
         TabView {
             generalTab
@@ -30,6 +69,54 @@ struct SettingsView: View {
                     set: { controllerService.isEnabled = $0 }
                 )
                 Toggle(i18n.t("settings.mapping.toggle"), isOn: binding)
+            }
+            Section(i18n.t("settings.touchpad.section")) {
+                Toggle(i18n.t("settings.touchpad.toggle"), isOn: $touchpadEnabled)
+                    .onChange(of: touchpadEnabled) { value in
+                        TouchpadMouseService.shared.isEnabled = value
+                        if value { syncFromService() }
+                    }
+
+                if touchpadEnabled {
+                    sliderRow(title: i18n.t("settings.touchpad.sensitivity"),
+                              value: $sensitivity,
+                              range: 0.8...6.0,
+                              step: 0.1,
+                              format: "%.1f×") {
+                        TouchpadMouseService.shared.config.sensitivity = $0
+                    }
+                    sliderRow(title: i18n.t("settings.touchpad.smoothing"),
+                              value: $smoothing,
+                              range: 0...1,
+                              step: 0.05,
+                              format: "%.2f") {
+                        TouchpadMouseService.shared.config.smoothing = $0
+                    }
+                    sliderRow(title: i18n.t("settings.touchpad.deadzone"),
+                              value: $deadzone,
+                              range: 0...30,
+                              step: 0.5,
+                              format: "%.1f") {
+                        TouchpadMouseService.shared.config.deadzoneSpeed = $0
+                    }
+                    Button(i18n.t("settings.touchpad.reset")) {
+                        let defaults = PointerConfig()
+                        sensitivity = defaults.sensitivity
+                        smoothing = defaults.smoothing
+                        deadzone = defaults.deadzoneSpeed
+                        TouchpadMouseService.shared.config = defaults
+                        TouchpadMouseService.shared.persistConfig()
+                    }
+                    LabeledContent(i18n.t("settings.touchpad.diagnostics")) {
+                        Text(controllerService.touchpadDiagnostics)
+                            .font(.caption.monospaced())
+                            .foregroundStyle(.secondary)
+                    }
+                }
+
+                Text(i18n.t("settings.touchpad.note"))
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
             }
             Section(i18n.t("settings.switch.section")) {
                 Picker(i18n.t("settings.switch.picker"), selection: Binding(

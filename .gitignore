@@ -3,6 +3,7 @@ build/
 .build/
 *.xcodeproj
 DerivedData/
+tools/hid-probe/ds4-probe
 
 # 本地工具数据
 .workbuddy/

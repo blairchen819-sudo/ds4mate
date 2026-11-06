@@ -56,6 +56,17 @@ public final class EventSynthesizer {
 
     // MARK: - 鼠标点击
 
+    /// 独立的按下 / 抬起（用于「按住拖动」这类需要保持按压状态的场景）。
+    /// 与 `click(type:)` 的区别：不会自动在 50ms 后释放。
+    public func mouseButton(_ type: CGEventType, button: CGMouseButton) {
+        let point = CGEvent(source: nil)?.location ?? .zero
+        guard let event = CGEvent(mouseEventSource: nil,
+                                  mouseType: type,
+                                  mouseCursorPosition: point,
+                                  mouseButton: button) else { return }
+        event.post(tap: .cghidEventTap)
+    }
+
     public func click(type: CGEventType) {
         let down = CGEvent(
             mouseEventSource: nil,
