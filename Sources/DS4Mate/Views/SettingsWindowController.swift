@@ -44,7 +44,10 @@ final class SettingsWindowController: NSObject, NSWindowDelegate {
             .environmentObject(appState)
             .environmentObject(controllerService)
             .environmentObject(permissionMonitor)
-            .frame(minWidth: 520, minHeight: 440)
+            // 触摸板分区全部展开（含双指选项）后内容约 900pt 高。
+            // 这里给 640 让折叠态完整可见、展开态只需少量滚动——
+            // 窗口不会跟随内容高度自动变高，所以初始值必须留够余量。
+            .frame(minWidth: 520, minHeight: 640)
 
         let hosting = NSHostingController(rootView: root)
         let w = NSWindow(contentViewController: hosting)

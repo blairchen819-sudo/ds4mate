@@ -165,7 +165,7 @@ struct SettingsView: View {
 
                         TouchpadMouseService.shared.persistConfig()
                     }
-                    LabeledContent(i18n.t("settings.touchpad.diagnostics")) {
+                    LabeledContent(i18n.t("settings.touchpad.diagnostics.label")) {
                         Text(controllerService.touchpadDiagnostics)
                             .font(.caption.monospaced())
                             .foregroundStyle(.secondary)
