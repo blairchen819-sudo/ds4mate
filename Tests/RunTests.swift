@@ -787,6 +787,107 @@ struct DS4MateTestRunner {
             expectEqual(engine.estimatedSpeed, 0, "reset 后速度归零")
         }
 
+        suite("指针引擎：抬手重按光标不跳变") {
+            // 用户实际反馈的场景（2026-11-06）：
+            // 「手指离开触摸板，再放到另一个区域，鼠标会跳到另一个地方，点击就点错了」
+            // 触摸板只输出相对位移，抬指期间的板面距离是空间距离，不是位移。
+            let size = CGSize(width: 2560, height: 1080)
+            let engine = TouchpadPointerEngine()
+
+            // 第一段：左半边向右滑
+            var firstLeg = 0.0
+            for i in 0..<25 {
+                let t = 1.0 + Double(i) * 0.012
+                engine.ingest(makeFrame(x: 0.15 + Double(i) * 0.012, y: 0.30, t: t, touchID: 1),
+                              arrivalTime: t)
+                for k in 0..<3 {
+                    firstLeg += engine.tick(now: t + Double(k) / 240.0, screenSize: size).dx
+                }
+            }
+            expect(firstLeg > 50, "第一段滑动正常产生位移（\(Int(firstLeg)) pt）")
+
+            // 手指抬起：模拟真实蓝牙链路连续发无触摸帧
+            for i in 0..<6 {
+                let t = 1.40 + Double(i) * 0.0155
+                engine.ingest(makeEmptyFrame(t: t), arrivalTime: t)
+                _ = engine.tick(now: t, screenSize: size)
+            }
+            expect(!engine.isTracking, "抬起后立即退出追踪状态")
+
+            // 在右下角完全不同的区域重新按下 —— 这段必须一个点都不动
+            var touchDownJump = 0.0
+            for i in 0..<8 {
+                let t = 1.52 + Double(i) * 0.0155
+                engine.ingest(makeFrame(x: 0.86, y: 0.82, t: t, touchID: 9), arrivalTime: t)
+                for k in 0..<3 {
+                    let d = engine.tick(now: t + Double(k) / 240.0, screenSize: size)
+                    touchDownJump += abs(d.dx) + abs(d.dy)
+                }
+            }
+            expect(touchDownJump < 1.0,
+                   "在另一区域重新按下，光标原地不动（实际 \(String(format: "%.2f", touchDownJump)) pt）")
+
+            // 重新按下后继续相对滑动，手感不能因此变差
+            var secondLeg = 0.0
+            for i in 0..<25 {
+                let t = 1.72 + Double(i) * 0.012
+                engine.ingest(makeFrame(x: 0.86 - Double(i) * 0.012, y: 0.82, t: t, touchID: 9),
+                              arrivalTime: t)
+                for k in 0..<3 {
+                    secondLeg += engine.tick(now: t + Double(k) / 240.0, screenSize: size).dx
+                }
+            }
+            expect(secondLeg < -50, "重按后相对滑动恢复正常（\(Int(secondLeg)) pt）")
+        }
+
+        suite("指针引擎：漏发抬帧时靠 touchID 兜底") {
+            // 蓝牙丢包会吞掉若干「无触摸帧」，此时收不到抬起信号，
+            // 只能靠触点编号变化识别「这是新的一次按下」，否则光标仍会瞬移。
+            let size = CGSize(width: 2560, height: 1080)
+            let engine = TouchpadPointerEngine()
+
+            for i in 0..<20 {
+                let t = 1.0 + Double(i) * 0.012
+                engine.ingest(makeFrame(x: 0.12 + Double(i) * 0.012, y: 0.20, t: t, touchID: 3),
+                              arrivalTime: t)
+                for k in 0..<3 { _ = engine.tick(now: t + Double(k) / 240.0, screenSize: size) }
+            }
+
+            // 没有空帧，直接跳到右下角 + 新编号
+            var jump = 0.0
+            for i in 0..<8 {
+                let t = 1.30 + Double(i) * 0.0155
+                engine.ingest(makeFrame(x: 0.88, y: 0.85, t: t, touchID: 11), arrivalTime: t)
+                for k in 0..<3 {
+                    let d = engine.tick(now: t + Double(k) / 240.0, screenSize: size)
+                    jump += abs(d.dx) + abs(d.dy)
+                }
+            }
+            expect(jump < 1.0, "编号变化 → 重建基准，不产生跳变（实际 \(String(format: "%.2f", jump)) pt）")
+        }
+
+        suite("指针引擎：同一次滑动不会被误判为新按下") {
+            // 反向保障：正常连续滑动中绝不能触发基准重建，否则手感会断成一格一格。
+            let size = CGSize(width: 2560, height: 1080)
+            let engine = TouchpadPointerEngine()
+            var total = 0.0
+            var ticksSeen = 0
+            for i in 0..<40 {
+                // 每包 15.5ms 走 0.02 板宽 ≈ 1.3 板宽/秒，属于正常快速滑动范围
+                let t = 1.0 + Double(i) * 0.0155
+                engine.ingest(makeFrame(x: 0.10 + Double(i) * 0.02, y: 0.5, t: t, touchID: 21),
+                              arrivalTime: t)
+                for k in 0..<3 {
+                    total += engine.tick(now: t + Double(k) / 240.0, screenSize: size).dx
+                    ticksSeen += 1
+                }
+            }
+            expect(engine.isTracking, "连续滑动全程保持追踪")
+            expect(total > 500, "快速滑动位移量正常（\(Int(total)) pt）")
+            // 若被误重置，位移会明显缩水（每次重置丢一整个基准周期）
+            expect(total > Double(ticksSeen) * 3, "没有因误重置而丢位移")
+        }
+
         suite("指针引擎：配置边界") {
             let e = TouchpadPointerEngine()
             expectEqual(e.config.sensitivity, PointerConfig().sensitivity, "默认灵敏度")
@@ -887,14 +988,19 @@ let realTouchingBTReport: [UInt8] = [
 ]
 
 /// 构造单点单采样的触摸帧
-func makeFrame(x: Double, y: Double, t: Double) -> TouchpadFrame {
+func makeFrame(x: Double, y: Double, t: Double, touchID: Int = 1) -> TouchpadFrame {
     TouchpadFrame(
-        samples: [TouchpadSample(time: t, x: x, y: y, slot: 0, active: true, touchID: 1)],
-        fingers: [FingerContact(touchID: 1, x: x, y: y, time: t)],
+        samples: [TouchpadSample(time: t, x: x, y: y, slot: 0, active: true, touchID: touchID)],
+        fingers: [FingerContact(touchID: touchID, x: x, y: y, time: t)],
         eventCount: 1,
         packetCounter: 0,
         arrivalTime: t
     )
+}
+
+/// 构造「手指已离开触摸板」的空帧（真机上对应 eventCount == 0 的报告）
+func makeEmptyFrame(t: Double) -> TouchpadFrame {
+    TouchpadFrame(samples: [], fingers: [], eventCount: 0, packetCounter: 0, arrivalTime: t)
 }
 
 /// 构造双指帧（用于手势识别器测试）

@@ -65,6 +65,13 @@ public final class TouchpadPointerEngine {
     private var lastTarget: CGPoint?
     private var lastTargetTime: TimeInterval?
 
+    /// 当前正在追踪的触点编号。
+    ///
+    /// DS4 每次「抬起 → 重新落下」都会分配一个新编号（0...127 循环）。
+    /// 编号变化是「板面瞬移」最可靠的信号：用户把手指从板上抬起来、换个地方按下去，
+    /// 两处之间的板面距离**不是**位移，必须把坐标基准清零重来。
+    private var activeTouchID: Int?
+
     // 诊断
     public private(set) var estimatedSpeed: Double = 0      // 点/秒
     public private(set) var measuredReportInterval: TimeInterval = 0
@@ -76,11 +83,6 @@ public final class TouchpadPointerEngine {
 
     /// 喂入一包解析结果。手指全部抬起时用空帧调用即可。
     public func ingest(_ frame: TouchpadFrame, arrivalTime: TimeInterval) {
-        // 丢包/长时间中断后重新按下：重置滤波状态，避免从头一帧产生跳变
-        if let last = lastIngestTime, arrivalTime - last > 0.12 {
-            softReset()
-        }
-
         if let last = lastIngestTime {
             let interval = arrivalTime - last
             if interval > 0.001 && interval < 0.1 {
@@ -95,8 +97,17 @@ public final class TouchpadPointerEngine {
         lastIngestTime = arrivalTime
 
         guard !frame.samples.isEmpty else {
-            // 手指抬起：清空追踪，下次按下重新建立基准
-            isTracking = false
+            // 手指离开触摸板 → 立刻结束追踪，并把采样队列与滤波基准一并丢弃。
+            //
+            // 这是「触摸板语义」的核心（2026-11-06 修正）：
+            // 触摸板只输出**相对位移**，所以手指离开期间光标必须原地不动；
+            // 手指在另一块区域重新按下时，两处之间的板面距离是「空间距离」而不是「位移」，
+            // 绝不能换算成光标位移。
+            //
+            // 之前的实现只置 isTracking = false，把绝对坐标基准（filtered / lastEmitted）
+            // 和历史采样留着，导致重新按下时「新位置 − 旧位置」被当成一两百点的位移甩出去，
+            // 光标瞬移，接着的点击自然全部点偏。
+            endTracking()
             return
         }
 
@@ -105,16 +116,27 @@ public final class TouchpadPointerEngine {
         // 多指时 frame.samples 为空（解析器已置空），走不到这里。
         let primary = frame.samples.filter { $0.active }
         guard !primary.isEmpty else {
-            isTracking = false
+            endTracking()
             return
         }
 
+        // 触点编号变了 = 旧手指已抬起、新手指已落下。
+        // 蓝牙偶尔会漏发「无触摸帧」，靠这条兜底，避免一次漏包就把光标甩到别处。
+        if let newID = primary.last?.touchID {
+            if let oldID = activeTouchID, oldID != newID {
+                softReset()
+            }
+            activeTouchID = newID
+        }
+
         for s in primary {
-            // 离群点抑制：极短时间内跳了大半个板宽，视为坏包
+            // 断触保护：极短时间内跨越大半个板宽，只可能是「抬手又落下」而非真实滑动。
+            // 人手在 40ms 内最多移动约 0.12 个板宽，这里给 0.30 留足余量。
+            // 命中后不丢弃该点，而是要重建基准 —— 丢弃会让手继续滑却毫无反应。
             if let prev = samples.last,
-               s.time - prev.time < 0.006,
-               hypot(s.x - prev.x, s.y - prev.y) > 0.35 {
-                continue
+               s.time - prev.time < 0.040,
+               hypot(s.x - prev.x, s.y - prev.y) > 0.30 {
+                softReset()
             }
             samples.append(s)
         }
@@ -130,6 +152,14 @@ public final class TouchpadPointerEngine {
         isTracking = true
     }
 
+    /// 结束一次触摸追踪：停止输出 + 丢弃所有绝对坐标基准。
+    /// 下次按下时 `tick` 会走「第一帧建立基准、不产生位移」的分支，光标原地不动。
+    private func endTracking() {
+        isTracking = false
+        activeTouchID = nil
+        softReset()
+    }
+
     /// 清空所有状态（停用/断开手柄时调用）
     public func reset() {
         samples.removeAll()
@@ -142,6 +172,7 @@ public final class TouchpadPointerEngine {
         estimatedSpeed = 0
         measuredReportInterval = 0
         isTracking = false
+        activeTouchID = nil
     }
 
     /// 保留追踪状态但清掉滤波基准（用于重新按下时平滑接入）
