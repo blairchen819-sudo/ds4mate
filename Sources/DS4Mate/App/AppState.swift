@@ -133,6 +133,22 @@ public final class AppState: ObservableObject {
         return copy
     }
 
+    /// 从 JSON 数据导入一份新预设，追加到列表并切换过去。
+    /// 数据先在这里解码校验；名字沿用现有的去重规则，实际落盘由 ProfileStore 负责。
+    @discardableResult
+    public func importProfile(from data: Data, name: String) throws -> Profile {
+        let decoded = try JSONDecoder().decode(Profile.self, from: data)
+        let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        let base = trimmed.isEmpty ? decoded.name : trimmed
+        let imported = try profileStore.importProfile(
+            from: data,
+            name: uniqueProfileName(base)
+        )
+        profiles.append(imported)
+        selectProfile(imported.id)
+        return imported
+    }
+
     /// 同名时自动加序号，避免预设列表里出现两个一模一样的名字。
     private func uniqueProfileName(_ base: String) -> String {
         let existing = Set(profiles.map(\.name))

@@ -158,12 +158,12 @@ struct DS4MateTestRunner {
                 }
             }
 
-            // Options 键 = exitApp
+            // Options 键默认禁用（不做任何事；退出走菜单栏）
             if let binding = starter.binding(for: .options) {
-                if case .exitApp = binding.action {
-                    expect(true, "初始预设 Options 键 = exitApp")
+                if case .none = binding.action {
+                    expect(true, "初始预设 Options 键 = .none")
                 } else {
-                    print("  ✗ 初始预设 Options 键应 exitApp，实际：\(binding.action)")
+                    print("  ✗ 初始预设 Options 键应为 .none，实际：\(binding.action)")
                     failed += 1
                 }
             }
@@ -250,6 +250,86 @@ struct DS4MateTestRunner {
                 print("  ✗ saveAs 失败：\(error)")
                 failed += 1
             }
+        }
+
+        // =====================================================
+        // Suite 4c: ProfileStore.exportData / importProfile
+        // =====================================================
+        suite("ProfileStore.exportData/importProfile") {
+            let tmpDir = URL(fileURLWithPath: NSTemporaryDirectory())
+                .appendingPathComponent("DS4MateTests-\(UUID().uuidString)", isDirectory: true)
+            let store = ProfileStore(directory: tmpDir)
+            defer { try? FileManager.default.removeItem(at: tmpDir) }
+
+            var parameters = ProfileParameters.defaults
+            parameters.deadzone = 0.22
+            parameters.triggerThreshold = 0.6
+            parameters.invertLeftStickY = true
+
+            let original = Profile(
+                name: "导出源-\(UUID().uuidString.prefix(8))",
+                isBuiltin: false,
+                bindings: [
+                    KeyBinding(input: .cross, action: .mouseLeftClick),
+                    KeyBinding(input: .options, action: .systemShortcut(.screenshotSelection)),
+                    KeyBinding(input: .rightStickX, action: .mouseMoveCursor)
+                ],
+                parameters: parameters
+            )
+
+            do {
+                try store.save(original)
+
+                // 导出 → 解码 roundtrip
+                let data = try store.exportData(original)
+                let decoded = try JSONDecoder().decode(Profile.self, from: data)
+                expectEqual(decoded.id, original.id, "导出数据保留原始 ID")
+                expectEqual(decoded.name, original.name, "导出数据保留名称")
+                expectEqual(decoded.bindings, original.bindings, "导出数据保留绑定")
+                expectEqual(decoded.parameters, original.parameters, "导出数据保留参数")
+
+                // 导入：新 UUID + isBuiltin=false + 绑定/参数不变
+                let imported = try store.importProfile(from: data, name: "导入副本")
+                expect(imported.id != original.id, "导入生成新 UUID")
+                expect(!imported.isBuiltin, "导入强制 isBuiltin = false")
+                expectEqual(imported.name, "导入副本", "导入使用传入的名称")
+                expectEqual(imported.bindings, original.bindings, "导入保留绑定")
+                expectEqual(imported.parameters, original.parameters, "导入保留参数")
+
+                // 导入不覆盖原文件：原始文件仍按原 ID 解码且内容不变
+                let reloaded = store.loadAll()
+                let originalOnDisk = reloaded.first(where: { $0.id == original.id })
+                expect(originalOnDisk != nil, "导入后原始预设文件仍然存在")
+                if let originalOnDisk {
+                    expectEqual(originalOnDisk.name, original.name, "原始预设名称未被改写")
+                    expectEqual(originalOnDisk.bindings, original.bindings, "原始预设绑定未被改写")
+                    expectEqual(originalOnDisk.parameters, original.parameters, "原始预设参数未被改写")
+                }
+                expect(reloaded.contains(where: { $0.id == imported.id }), "导入的预设已落盘")
+            } catch {
+                print("  ✗ export/import 失败：\(error)")
+                failed += 1
+            }
+
+            // 即使来源带内置标记，导入后也必须是普通预设
+            let builtinSource = Profile(
+                name: "内置来源",
+                isBuiltin: true,
+                bindings: [KeyBinding(input: .ps, action: .none)]
+            )
+            do {
+                let data = try store.exportData(builtinSource)
+                let imported = try store.importProfile(from: data, name: "内置导入")
+                expect(!imported.isBuiltin, "导入强制清除内置标记")
+            } catch {
+                print("  ✗ 内置来源导入失败：\(error)")
+                failed += 1
+            }
+
+            // 非法 JSON 必须抛错
+            expectThrows({
+                _ = try store.importProfile(from: Data("not a profile".utf8), name: "坏数据")
+            }, "非法 JSON 导入抛错")
         }
 
         // =====================================================
@@ -895,6 +975,217 @@ struct DS4MateTestRunner {
             e.config.deadzoneSpeed = 0
             expect(e.config.smoothing <= 1.0, "平滑系数在合法范围")
             expect(e.config.maxStepPerTick > 0, "单 tick 上限为正")
+        }
+
+        // =====================================================
+        // Suite: 轻触即点击（TapClickDetector）
+        // =====================================================
+        suite("轻触即点击（TapClickDetector）") {
+            func enabledDetector() -> TapClickDetector {
+                let d = TapClickDetector()
+                d.config.isEnabled = true
+                return d
+            }
+
+            // 快速轻触 → 抬起时恰好一次点击
+            do {
+                let d = enabledDetector()
+                expect(!d.ingest(makeFrame(x: 0.5, y: 0.5, t: 1.0)), "落下帧不点击")
+                expect(!d.ingest(makeFrame(x: 0.501, y: 0.5, t: 1.05)), "接触中不点击")
+                expect(d.ingest(makeEmptyFrame(t: 1.10)), "快速轻触抬起 → 一次点击")
+            }
+
+            // 重复的抬起 / 空帧不会二次点击
+            do {
+                let d = enabledDetector()
+                _ = d.ingest(makeFrame(x: 0.5, y: 0.5, t: 2.0))
+                expect(d.ingest(makeEmptyFrame(t: 2.10)), "首次抬起产生点击")
+                expect(!d.ingest(makeEmptyFrame(t: 2.12)), "重复抬帧不再点击")
+                expect(!d.ingest(makeEmptyFrame(t: 2.14)), "持续空帧不再点击")
+            }
+
+            // 长按超过时长阈值 → 不点击
+            do {
+                let d = enabledDetector()
+                _ = d.ingest(makeFrame(x: 0.5, y: 0.5, t: 3.0))
+                expect(!d.ingest(makeEmptyFrame(t: 3.30)), "长按超过 180ms 不点击")
+            }
+
+            // 位移超过阈值 → 不点击；按面板实际比例归一化
+            do {
+                let d = enabledDetector()
+                _ = d.ingest(makeFrame(x: 0.500, y: 0.5, t: 4.0))
+                _ = d.ingest(makeFrame(x: 0.530, y: 0.5, t: 4.05))
+                expect(!d.ingest(makeEmptyFrame(t: 4.10)), "横向移动 3% 超过 2% 阈值 → 不点击")
+
+                let v = enabledDetector()
+                _ = v.ingest(makeFrame(x: 0.5, y: 0.500, t: 4.2))
+                _ = v.ingest(makeFrame(x: 0.5, y: 0.530, t: 4.25))
+                expect(v.ingest(makeEmptyFrame(t: 4.3)),
+                       "纵向 3% 板高按 1920/943 比例归一化后仍在阈值内 → 点击")
+            }
+
+            // 第二根手指出现 → 作废，且全部抬起后可重新开始
+            do {
+                let d = enabledDetector()
+                _ = d.ingest(makeFrame(x: 0.5, y: 0.5, t: 5.0, touchID: 1))
+                _ = d.ingest(makeTwoFingerFrame(idA: 1, xA: 0.5, yA: 0.5,
+                                                idB: 2, xB: 0.7, yB: 0.5, t: 5.05))
+                expect(!d.ingest(makeEmptyFrame(t: 5.10)), "接触期间出现第二根手指 → 不点击")
+                _ = d.ingest(makeFrame(x: 0.4, y: 0.4, t: 5.2, touchID: 3))
+                expect(d.ingest(makeEmptyFrame(t: 5.3)), "多指全部抬起后可重新轻触")
+            }
+
+            // 接触期间按下物理按键 → 作废
+            do {
+                let d = enabledDetector()
+                _ = d.ingest(makeFrame(x: 0.5, y: 0.5, t: 6.0))
+                expect(!d.notePhysicalClick(pressed: true, at: 6.05),
+                       "轻触前的物理按下不被吞掉")
+                expect(!d.ingest(makeEmptyFrame(t: 6.10)),
+                       "接触期间按下物理按键 → 不点击")
+            }
+
+            // 轻触后 150ms 窗口内的物理按下 / 抬起都被抑制
+            do {
+                let d = enabledDetector()
+                _ = d.ingest(makeFrame(x: 0.5, y: 0.5, t: 7.0))
+                expect(d.ingest(makeEmptyFrame(t: 7.10)), "轻触在 7.10 产生点击")
+                expect(d.notePhysicalClick(pressed: true, at: 7.20),
+                       "100ms 后（窗口内）的物理按下被抑制")
+                expect(d.notePhysicalClick(pressed: false, at: 7.30),
+                       "对应的抬起也被抑制，不产生孤立 mouse-up")
+                expect(!d.notePhysicalClick(pressed: true, at: 7.40),
+                       "300ms 后（窗口外）的物理按下正常发出")
+                expect(!d.notePhysicalClick(pressed: false, at: 7.42),
+                       "窗口外的抬起正常发出")
+            }
+
+            // 恰好 150ms 边界内仍抑制
+            do {
+                let d = enabledDetector()
+                _ = d.ingest(makeFrame(x: 0.5, y: 0.5, t: 8.0))
+                _ = d.ingest(makeEmptyFrame(t: 8.10))
+                expect(d.notePhysicalClick(pressed: true, at: 8.25),
+                       "恰好 150ms 边界内仍抑制")
+                expect(d.notePhysicalClick(pressed: false, at: 8.27),
+                       "边界抑制对应的抬起也吞掉")
+            }
+
+            // 回归：轻触点击后，窗口内开始的新接触 + 被抑制的物理回弹不得再点击
+            do {
+                let d = enabledDetector()
+                _ = d.ingest(makeFrame(x: 0.5, y: 0.5, t: 20.0, touchID: 1))
+                expect(d.ingest(makeEmptyFrame(t: 20.10)), "回归：第一次轻触产生点击")
+                expect(!d.ingest(makeFrame(x: 0.5, y: 0.5, t: 20.15, touchID: 2)),
+                       "回归：抑制窗口内新接触落下不点击")
+                expect(d.notePhysicalClick(pressed: true, at: 20.20),
+                       "回归：窗口内物理回弹按下被抑制")
+                expect(d.notePhysicalClick(pressed: false, at: 20.25),
+                       "回归：窗口内物理回弹抬起被抑制")
+                expect(!d.ingest(makeEmptyFrame(t: 20.30)),
+                       "回归：释放 + 抬起不得产生第二次点击")
+                _ = d.ingest(makeFrame(x: 0.5, y: 0.5, t: 20.40, touchID: 3))
+                expect(d.ingest(makeEmptyFrame(t: 20.50)),
+                       "回归：抬指后全新轻触可以再次点击")
+            }
+
+            // 回归：被抑制的物理按键仍按住时落下的新接触，抬起时也不能点击
+            do {
+                let d = enabledDetector()
+                _ = d.ingest(makeFrame(x: 0.5, y: 0.5, t: 21.0, touchID: 1))
+                expect(d.ingest(makeEmptyFrame(t: 21.10)), "回归：第一次轻触产生点击")
+                expect(d.notePhysicalClick(pressed: true, at: 21.15),
+                       "回归：紧随其后的物理按下被抑制")
+                expect(!d.ingest(makeFrame(x: 0.5, y: 0.5, t: 21.18, touchID: 2)),
+                       "回归：按住物理键期间落下的接触不建立候选")
+                expect(d.notePhysicalClick(pressed: false, at: 21.20),
+                       "回归：对应的物理抬起被抑制")
+                expect(!d.ingest(makeEmptyFrame(t: 21.25)),
+                       "回归：按下先于接触时，抬手也不得补发第二次点击")
+                _ = d.ingest(makeFrame(x: 0.5, y: 0.5, t: 21.35, touchID: 3))
+                expect(d.ingest(makeEmptyFrame(t: 21.45)),
+                       "回归：按住结束后全新轻触可以再次点击")
+            }
+
+            // 回归：非抑制的物理点击与接触重叠时，释放后同一接触不能补发轻触点击
+            do {
+                let d = enabledDetector()
+                expect(!d.notePhysicalClick(pressed: true, at: 22.0),
+                       "回归：无轻触前科的物理按下正常发出")
+                expect(!d.ingest(makeFrame(x: 0.5, y: 0.5, t: 22.05, touchID: 1)),
+                       "回归：物理键按住期间的接触不建立候选")
+                expect(!d.notePhysicalClick(pressed: false, at: 22.10),
+                       "回归：非抑制的物理抬起正常发出")
+                expect(!d.ingest(makeFrame(x: 0.5, y: 0.5, t: 22.15, touchID: 1)),
+                       "回归：释放后同一接触不能重新建立候选")
+                expect(!d.ingest(makeEmptyFrame(t: 22.20)),
+                       "回归：同一接触抬起不得产生点击")
+                _ = d.ingest(makeFrame(x: 0.5, y: 0.5, t: 22.30, touchID: 2))
+                expect(d.ingest(makeEmptyFrame(t: 22.40)),
+                       "回归：抬指后全新轻触可以再次点击")
+            }
+
+            // 没有抬帧却换触点编号 → 不点击
+            do {
+                let d = enabledDetector()
+                _ = d.ingest(makeFrame(x: 0.5, y: 0.5, t: 9.0, touchID: 1))
+                _ = d.ingest(makeFrame(x: 0.5, y: 0.5, t: 9.05, touchID: 2))
+                expect(!d.ingest(makeEmptyFrame(t: 9.10)),
+                       "没有抬帧却换触点编号 → 不点击")
+            }
+
+            // 两次独立轻触 → 两次点击（不是双击）
+            do {
+                let d = enabledDetector()
+                _ = d.ingest(makeFrame(x: 0.5, y: 0.5, t: 10.0, touchID: 1))
+                expect(d.ingest(makeEmptyFrame(t: 10.10)), "第一次轻触 → 点击")
+                _ = d.ingest(makeFrame(x: 0.5, y: 0.5, t: 10.20, touchID: 2))
+                expect(d.ingest(makeEmptyFrame(t: 10.30)),
+                       "第二次轻触 → 再次点击（各自独立，不是双击）")
+            }
+
+            // 关闭时不做任何事
+            do {
+                let d = TapClickDetector()
+                expect(!d.config.isEnabled, "默认关闭")
+                _ = d.ingest(makeFrame(x: 0.5, y: 0.5, t: 11.0))
+                expect(!d.ingest(makeEmptyFrame(t: 11.10)),
+                       "关闭时即使快速轻触也不点击")
+                expect(!d.notePhysicalClick(pressed: true, at: 11.10),
+                       "关闭时不抑制物理点击")
+            }
+
+            // 自定义阈值
+            do {
+                let d = TapClickDetector()
+                d.config.isEnabled = true
+                d.config.maxDuration = 0.10
+                d.config.maxMovement = 0.05
+
+                _ = d.ingest(makeFrame(x: 0.5, y: 0.5, t: 12.0))
+                expect(!d.ingest(makeEmptyFrame(t: 12.12)),
+                       "自定义时长 100ms：按住 120ms 不点击")
+
+                _ = d.ingest(makeFrame(x: 0.4, y: 0.4, t: 12.2))
+                _ = d.ingest(makeFrame(x: 0.44, y: 0.4, t: 12.25))
+                expect(d.ingest(makeEmptyFrame(t: 12.28)),
+                       "自定义位移 5%：移动 4% 可点击")
+
+                _ = d.ingest(makeFrame(x: 0.4, y: 0.4, t: 12.4))
+                _ = d.ingest(makeFrame(x: 0.47, y: 0.4, t: 12.45))
+                expect(!d.ingest(makeEmptyFrame(t: 12.48)),
+                       "自定义位移 5%：移动 7% 不点击")
+            }
+
+            // reset 清掉残留的落下状态
+            do {
+                let d = enabledDetector()
+                _ = d.ingest(makeFrame(x: 0.5, y: 0.5, t: 13.0))
+                d.reset()
+                expect(!d.ingest(makeEmptyFrame(t: 13.02)),
+                       "reset 后残留的落帧不会产生点击")
+            }
         }
 
         // =====================================================

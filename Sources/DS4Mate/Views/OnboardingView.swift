@@ -80,6 +80,9 @@ struct OnboardingView: View {
                 .font(.title2)
             Text(i18n.t("onboarding.permission.body"))
                 .foregroundStyle(.secondary)
+            Text(i18n.t("onboarding.permission.inputMonitoring.note"))
+                .font(.caption)
+                .foregroundStyle(.secondary)
             HStack(spacing: 8) {
                 Image(systemName: permissionMonitor.isAccessibilityGranted
                       ? "checkmark.circle.fill"
@@ -94,6 +97,9 @@ struct OnboardingView: View {
                 Button(i18n.t("common.openSystemSettings")) {
                     permissionMonitor.requestAccessibility()
                     permissionMonitor.openAccessibilitySettings()
+                }
+                Button(i18n.t("common.openInputMonitoringSettings")) {
+                    permissionMonitor.openInputMonitoringSettings()
                 }
                 Button(i18n.t("common.recheck")) {
                     permissionMonitor.refresh()

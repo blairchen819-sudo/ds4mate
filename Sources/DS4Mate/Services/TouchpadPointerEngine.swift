@@ -303,3 +303,174 @@ public final class TouchpadPointerEngine {
                        y: a.y + (b.y - a.y) * t)
     }
 }
+
+// MARK: - 轻触即点击（Tap to Click）
+
+/// 轻触即点击的判定参数。
+public struct TapClickConfig: Equatable {
+    /// 总开关。默认关闭，避免无意的手指点按产生额外点击。
+    public var isEnabled: Bool = false
+    /// 一次轻触允许的最长按住时间（秒）
+    public var maxDuration: TimeInterval = 0.18
+    /// 轻触期间允许的最大位移（以触摸板宽度归一化）
+    public var maxMovement: Double = 0.02
+    /// 轻触点击后，抑制物理按键点击的时间窗口（秒）
+    public var physicalClickSuppressionWindow: TimeInterval = 0.15
+
+    public init() {}
+}
+
+/// 单指「轻触 → 抬起」识别器（纯逻辑，无 IO，可单测）。
+///
+/// 判定规则：
+/// - 候选只在恰好一根手指接触时建立；
+/// - 抬起时按住时长 ≤ maxDuration，且相对起点的最大位移 ≤ maxMovement；
+/// - 多指、触点编号变化、接触期间按下物理按键都会作废候选；
+/// - 每次有效轻触只产出一个点击，重复的抬帧不会重复产出。
+///
+/// 位移按触摸板实际比例换算：`hypot(dx * 1920, dy * 943) / 1920`，
+/// 这样纵向 1% 的位移不会被当成比横向更小的距离。
+public final class TapClickDetector {
+
+    public var config = TapClickConfig()
+
+    private struct Candidate {
+        let touchID: Int
+        let startX: Double
+        let startY: Double
+        let startTime: TimeInterval
+        var maxMovement: Double
+    }
+
+    private var candidate: Candidate?
+    /// 触点曾经落下（用于区分「抬起帧」与「一直空着」）
+    private var wasDown = false
+    /// 已作废，等手指全部抬起后才允许重新建立候选
+    private var blockedUntilLift = false
+    /// 最近一次轻触点击产生的时刻（用于抑制物理按键）
+    private var lastTapEmitTime: TimeInterval?
+    /// 当前物理按键按下是否已被抑制（抬起时沿用同一决定，避免发出孤立的 mouse-up）
+    private var suppressedPhysicalPress = false
+    /// 物理按键是否仍按住。按住期间不建立新的轻触候选，
+    /// 避免「轻触点击 → 新接触 → 物理回弹被抑制 → 抬起又算一次轻触」造成连击。
+    private var physicalPressHeld = false
+
+    public init() {}
+
+    /// 喂入一包触摸数据。
+    /// - Returns: 本次是否应产生一次轻触点击（只在有效轻触抬起的那一帧返回 true）
+    public func ingest(_ frame: TouchpadFrame) -> Bool {
+        guard config.isEnabled else {
+            reset()
+            return false
+        }
+
+        // 多指：作废候选，并且必须等所有手指抬起后才能重新开始
+        if frame.fingers.count >= 2 {
+            candidate = nil
+            blockedUntilLift = true
+            wasDown = true
+            return false
+        }
+
+        if let finger = frame.fingers.first {
+            wasDown = true
+            // 物理按键按住期间的新接触不参与轻触判定
+            if physicalPressHeld { return false }
+            if blockedUntilLift { return false }
+
+            if var c = candidate {
+                // 没有抬帧却换了触点编号 = 旧手指已离开、新手指已落下，不能算作轻触
+                guard c.touchID == finger.touchID else {
+                    candidate = nil
+                    blockedUntilLift = true
+                    return false
+                }
+                let dx = finger.x - c.startX
+                let dy = finger.y - c.startY
+                let moved = hypot(dx * DS4TouchParser.panelWidth,
+                                  dy * DS4TouchParser.panelHeight) / DS4TouchParser.panelWidth
+                c.maxMovement = max(c.maxMovement, moved)
+                candidate = c
+                return false
+            }
+
+            // 候选只在恰好一根手指落下时建立
+            candidate = Candidate(touchID: finger.touchID,
+                                  startX: finger.x,
+                                  startY: finger.y,
+                                  startTime: frame.arrivalTime,
+                                  maxMovement: 0)
+            return false
+        }
+
+        // 空帧 = 手指抬起。只有本次接触确实落下过，才可能是轻触的收尾。
+        guard wasDown else { return false }
+        wasDown = false
+        blockedUntilLift = false
+
+        guard let c = candidate else { return false }
+        candidate = nil
+
+        let duration = frame.arrivalTime - c.startTime
+        guard duration >= 0,
+              duration <= config.maxDuration,
+              c.maxMovement <= config.maxMovement else { return false }
+
+        lastTapEmitTime = frame.arrivalTime
+        return true
+    }
+
+    /// 物理触摸板按键状态。
+    /// - Returns: true 表示这次按下/抬起应被吞掉（轻触后的机械回弹，避免重复点击）。
+    @discardableResult
+    public func notePhysicalClick(pressed: Bool, at time: TimeInterval) -> Bool {
+        guard config.isEnabled else {
+            reset()
+            return false
+        }
+
+        if pressed {
+            var suppress = false
+            if let tapTime = lastTapEmitTime,
+               time >= tapTime,
+               time - tapTime <= config.physicalClickSuppressionWindow + 1e-9 {
+                suppress = true
+            }
+            suppressedPhysicalPress = suppress
+            physicalPressHeld = true
+
+            // 无论是否被抑制，接触期间的物理按下都作废候选并阻断到抬指。
+            // 被抑制的物理回弹（suppress == true）同样不能让新接触继续算作轻触，
+            // 否则「轻触点击 → 窗口内再次轻触」会变成双击。
+            if wasDown {
+                candidate = nil
+                blockedUntilLift = true
+            }
+            return suppress
+        }
+
+        let suppress = suppressedPhysicalPress
+        suppressedPhysicalPress = false
+        physicalPressHeld = false
+
+        // 只要有手指接触与这次物理按下重叠（无论是否被抑制），这次接触都作废。
+        // 否则非抑制的物理点击结束后，同一根手指还能重新建立轻触候选，
+        // 抬手时补发一次轻触点击 —— 一次物理点击就变成了两次。
+        if wasDown {
+            candidate = nil
+            blockedUntilLift = true
+        }
+        return suppress
+    }
+
+    /// 清空全部状态（启停、关闭开关时调用）
+    public func reset() {
+        candidate = nil
+        wasDown = false
+        blockedUntilLift = false
+        lastTapEmitTime = nil
+        suppressedPhysicalPress = false
+        physicalPressHeld = false
+    }
+}

@@ -20,6 +20,9 @@ public final class TouchpadMouseService {
 
     public let engine = TouchpadPointerEngine()
 
+    /// 轻触即点击识别（与指针引擎相互独立）
+    public let tapDetector = TapClickDetector()
+
     /// 双指手势识别（滚动 / 捏合缩放）
     public let gesture = TwoFingerGestureRecognizer()
 
@@ -59,6 +62,12 @@ public final class TouchpadMouseService {
         set { engine.config = newValue }
     }
 
+    /// 轻触即点击参数（直接读写识别器，避免维护两份状态）
+    public var tapConfig: TapClickConfig {
+        get { tapDetector.config }
+        set { tapDetector.config = newValue }
+    }
+
     /// 触摸板被按下（click）时是否冻结指针。
     /// 默认关闭：按下拖动（选中文字）是常规操作，冻结会让它失效；
     /// 按下瞬间的位置抖动由速度死区吸收。
@@ -70,6 +79,7 @@ public final class TouchpadMouseService {
         guard !isRunning else { return }
         isRunning = true
         engine.reset()
+        tapDetector.reset()
         gesture.reset()
         wasMultiTouch = false
         shadowPosition = nil
@@ -92,6 +102,7 @@ public final class TouchpadMouseService {
         timer = nil
         isRunning = false
         engine.reset()
+        tapDetector.reset()
         gesture.reset()
         wasMultiTouch = false
         shadowPosition = nil
@@ -105,6 +116,12 @@ public final class TouchpadMouseService {
     /// - 多指 → 手势识别（滚动 / 缩放），并把指针完全冻结
     public func ingest(_ frame: TouchpadFrame) {
         guard isRunning else { return }
+
+        // 轻触即点击要在多指分流之前判断：多指帧本身会作废候选，
+        // 而抬起帧不是多指，需要走完整个「落下 → 抬起」流程才能确认一次轻触。
+        if tapDetector.ingest(frame) {
+            EventSynthesizer.shared.click(type: .leftMouseDown)
+        }
 
         if frame.isMultiTouch {
             // 进入双指：立刻清空指针状态，避免双指前的位置残留导致双指结束后跳变
@@ -152,8 +169,14 @@ public final class TouchpadMouseService {
     }
 
     /// 触摸板物理按键状态（由 ControllerService 转发）
-    public func setPressed(_ pressed: Bool) {
+    /// - Returns: true 表示这次物理按下/抬起已被轻触点击吸收，调用方不要再注入鼠标事件。
+    @discardableResult
+    public func setPressed(_ pressed: Bool) -> Bool {
         engine.isFrozen = freezeWhileClicking && pressed
+        return tapDetector.notePhysicalClick(
+            pressed: pressed,
+            at: ProcessInfo.processInfo.systemUptime
+        )
     }
 
     // MARK: - 输出循环
@@ -260,6 +283,11 @@ extension TouchpadMouseService {
     private static let keyZoomScale       = "ds4.touchpadMouse.zoomScale"
     private static let keyInvertScroll    = "ds4.touchpadMouse.invertScroll"
 
+    // 轻触即点击
+    private static let keyTapEnabled  = "ds4.touchpadMouse.tapToClickEnabled"
+    private static let keyTapDuration = "ds4.touchpadMouse.tapMaxDuration"
+    private static let keyTapMovement = "ds4.touchpadMouse.tapMaxMovement"
+
     /// 用户是否开启了「触摸板当鼠标」。
     /// 开启后：触摸板滑动移动指针，触摸板按下 = 鼠标左键（不再触发原有映射）。
     public var isEnabled: Bool {
@@ -304,6 +332,18 @@ extension TouchpadMouseService {
             g.invertScroll = d.bool(forKey: Self.keyInvertScroll)
         }
         gesture.config = g
+
+        var tap = tapConfig
+        if d.object(forKey: Self.keyTapEnabled) != nil {
+            tap.isEnabled = d.bool(forKey: Self.keyTapEnabled)
+        }
+        if d.object(forKey: Self.keyTapDuration) != nil {
+            tap.maxDuration = min(max(d.double(forKey: Self.keyTapDuration), 0.05), 0.5)
+        }
+        if d.object(forKey: Self.keyTapMovement) != nil {
+            tap.maxMovement = min(max(d.double(forKey: Self.keyTapMovement), 0.002), 0.10)
+        }
+        tapConfig = tap
     }
 
     /// 把手感参数写回 UserDefaults
@@ -317,5 +357,9 @@ extension TouchpadMouseService {
         d.set(gesture.config.scrollScale, forKey: Self.keyScrollScale)
         d.set(gesture.config.zoomScale, forKey: Self.keyZoomScale)
         d.set(gesture.config.invertScroll, forKey: Self.keyInvertScroll)
+
+        d.set(tapConfig.isEnabled, forKey: Self.keyTapEnabled)
+        d.set(tapConfig.maxDuration, forKey: Self.keyTapDuration)
+        d.set(tapConfig.maxMovement, forKey: Self.keyTapMovement)
     }
 }

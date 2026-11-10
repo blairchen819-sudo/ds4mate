@@ -89,6 +89,29 @@ public final class ProfileStore {
         return copy
     }
 
+    /// 把一份预设编码为可导出的 JSON 数据。
+    public func exportData(_ profile: Profile) throws -> Data {
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
+        return try encoder.encode(profile)
+    }
+
+    /// 从 JSON 数据导入一份新预设。
+    /// 一律生成新 UUID、标记为普通预设，复制原文件的绑定与参数；
+    /// 因为文件名由新 UUID 决定，永远落在新文件上，不会覆盖已有预设。
+    public func importProfile(from data: Data, name: String) throws -> Profile {
+        let decoded = try JSONDecoder().decode(Profile.self, from: data)
+        let imported = Profile(
+            name: name,
+            version: decoded.version,
+            isBuiltin: false,
+            bindings: decoded.bindings,
+            parameters: decoded.parameters
+        )
+        try save(imported)
+        return imported
+    }
+
     /// 删除预设。
     public func delete(_ profile: Profile) throws {
         guard !profile.isBuiltin else {
@@ -131,7 +154,7 @@ public final class ProfileStore {
                 .init(input: .ps, action: .none),  // 默认禁用，避免误触
                 .init(input: .share, action: .systemShortcut(.screenshotSelection)),
                 .init(input: .touchpadButton, action: .systemShortcut(.missionControl)),
-                .init(input: .options, action: .exitApp)
+                .init(input: .options, action: .none)  // 默认禁用，避免误触退出
             ]
         )
     }

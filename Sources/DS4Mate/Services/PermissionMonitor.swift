@@ -41,6 +41,14 @@ public final class PermissionMonitor: ObservableObject {
         }
     }
 
+    /// 打开系统设置到「输入监控」页面。
+    /// 这项权限无法可靠地程序化检测，只负责把用户带到正确的列表。
+    public func openInputMonitoringSettings() {
+        if let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_ListenEvent") {
+            NSWorkspace.shared.open(url)
+        }
+    }
+
     /// 在 Finder 中显示当前 .app（用户可拖到辅助功能列表）
     public func revealAppInFinder() {
         // 找到当前运行的 .app bundle

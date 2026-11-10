@@ -227,7 +227,9 @@ public final class ControllerService: ObservableObject {
         // （否则会同时触发「调度中心」之类，变成一次点击两个动作）
         if input == .touchpadButton && TouchpadMouseService.shared.isEnabled {
             eventStream.send(pressed ? .buttonDown(input) : .buttonUp(input))
-            TouchpadMouseService.shared.setPressed(pressed)
+            let suppressed = TouchpadMouseService.shared.setPressed(pressed)
+            // 轻触即点击刚产生过点击时，物理按键的机械回弹不能再发一次 mouse down/up
+            guard !suppressed else { return }
             eventSynthesizer.mouseButton(pressed ? .leftMouseDown : .leftMouseUp, button: .left)
             return
         }

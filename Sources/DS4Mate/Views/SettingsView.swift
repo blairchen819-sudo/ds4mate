@@ -22,6 +22,11 @@ struct SettingsView: View {
     @State private var zoomScale = TouchpadMouseService.shared.gesture.config.zoomScale
     @State private var invertScroll = TouchpadMouseService.shared.gesture.config.invertScroll
 
+    // 轻触即点击
+    @State private var tapToClickEnabled = TouchpadMouseService.shared.tapConfig.isEnabled
+    @State private var tapMaxDuration = TouchpadMouseService.shared.tapConfig.maxDuration
+    @State private var tapMaxMovement = TouchpadMouseService.shared.tapConfig.maxMovement
+
     private func syncFromService() {
         let c = TouchpadMouseService.shared.config
         sensitivity = c.sensitivity
@@ -33,6 +38,11 @@ struct SettingsView: View {
         scrollScale = g.scrollScale
         zoomScale = g.zoomScale
         invertScroll = g.invertScroll
+
+        let tap = TouchpadMouseService.shared.tapConfig
+        tapToClickEnabled = tap.isEnabled
+        tapMaxDuration = tap.maxDuration
+        tapMaxMovement = tap.maxMovement
     }
 
     /// 一行「标题 + 当前值 + 滑块」
@@ -41,12 +51,13 @@ struct SettingsView: View {
                            range: ClosedRange<Double>,
                            step: Double,
                            format: String,
+                           displayScale: Double = 1,
                            apply: @escaping (Double) -> Void) -> some View {
         VStack(alignment: .leading, spacing: 2) {
             HStack {
                 Text(title)
                 Spacer()
-                Text(String(format: format, value.wrappedValue))
+                Text(String(format: format, value.wrappedValue * displayScale))
                     .font(.caption.monospaced())
                     .foregroundStyle(.secondary)
             }
@@ -71,6 +82,48 @@ struct SettingsView: View {
                 .tabItem { Label(i18n.t("settings.tab.about"), systemImage: "info.circle") }
         }
         .padding(20)
+    }
+
+    private var appVersion: String {
+        Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "—"
+    }
+
+    private func exportActiveProfile() {
+        guard let profile = appState.activeProfile else { return }
+        let panel = NSSavePanel()
+        panel.allowedFileTypes = ["json"]
+        panel.nameFieldStringValue = "\(profile.name).json"
+        guard panel.runModal() == .OK, let url = panel.url else { return }
+        do {
+            let data = try appState.profileStore.exportData(profile)
+            try data.write(to: url, options: .atomic)
+        } catch {
+            presentFileError(error, titleKey: "settings.data.export.failed.title")
+        }
+    }
+
+    private func importProfile() {
+        let panel = NSOpenPanel()
+        panel.allowedFileTypes = ["json"]
+        panel.allowsMultipleSelection = false
+        panel.canChooseDirectories = false
+        guard panel.runModal() == .OK, let url = panel.url else { return }
+        do {
+            let data = try Data(contentsOf: url)
+            let name = url.deletingPathExtension().lastPathComponent
+            try appState.importProfile(from: data, name: name)
+        } catch {
+            presentFileError(error, titleKey: "settings.data.import.failed.title")
+        }
+    }
+
+    private func presentFileError(_ error: Error, titleKey: String) {
+        let alert = NSAlert()
+        alert.alertStyle = .warning
+        alert.messageText = i18n.t(titleKey)
+        alert.informativeText = error.localizedDescription
+        alert.addButton(withTitle: i18n.t("common.ok"))
+        alert.runModal()
     }
 
     private var generalTab: some View {
@@ -110,6 +163,37 @@ struct SettingsView: View {
                               step: 0.5,
                               format: "%.1f") {
                         TouchpadMouseService.shared.config.deadzoneSpeed = $0
+                    }
+
+                    Divider()
+
+                    Toggle(i18n.t("settings.touchpad.tapToClick.toggle"),
+                           isOn: $tapToClickEnabled)
+                        .onChange(of: tapToClickEnabled) { value in
+                            TouchpadMouseService.shared.tapConfig.isEnabled = value
+                            TouchpadMouseService.shared.persistConfig()
+                        }
+
+                    if tapToClickEnabled {
+                        sliderRow(title: i18n.t("settings.touchpad.tapToClick.duration"),
+                                  value: $tapMaxDuration,
+                                  range: 0.08...0.35,
+                                  step: 0.01,
+                                  format: "%.0f ms",
+                                  displayScale: 1000) {
+                            TouchpadMouseService.shared.tapConfig.maxDuration = $0
+                        }
+                        sliderRow(title: i18n.t("settings.touchpad.tapToClick.movement"),
+                                  value: $tapMaxMovement,
+                                  range: 0.005...0.05,
+                                  step: 0.001,
+                                  format: "%.1f%%",
+                                  displayScale: 100) {
+                            TouchpadMouseService.shared.tapConfig.maxMovement = $0
+                        }
+                        Text(i18n.t("settings.touchpad.tapToClick.note"))
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
                     }
 
                     Divider()
@@ -162,6 +246,12 @@ struct SettingsView: View {
                         zoomScale = g.zoomScale
                         invertScroll = g.invertScroll
                         TouchpadMouseService.shared.gesture.config = g
+
+                        let tap = TapClickConfig()
+                        tapToClickEnabled = tap.isEnabled
+                        tapMaxDuration = tap.maxDuration
+                        tapMaxMovement = tap.maxMovement
+                        TouchpadMouseService.shared.tapConfig = tap
 
                         TouchpadMouseService.shared.persistConfig()
                     }
@@ -217,8 +307,16 @@ struct SettingsView: View {
                         .font(.caption.monospaced())
                         .textSelection(.enabled)
                 }
-                Button(i18n.t("common.revealInFinder")) {
-                    NSWorkspace.shared.open(URL(fileURLWithPath: appState.profileStore.profilesDirectoryPath))
+                HStack {
+                    Button(i18n.t("settings.data.export")) {
+                        exportActiveProfile()
+                    }
+                    Button(i18n.t("settings.data.import")) {
+                        importProfile()
+                    }
+                    Button(i18n.t("common.revealInFinder")) {
+                        NSWorkspace.shared.open(URL(fileURLWithPath: appState.profileStore.profilesDirectoryPath))
+                    }
                 }
             }
             Section(i18n.t("settings.reset.section")) {
@@ -269,6 +367,14 @@ struct SettingsView: View {
                     }
                 }
             }
+            Section(i18n.t("settings.permissions.inputMonitoring.section")) {
+                Text(i18n.t("settings.permissions.inputMonitoring.note"))
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                Button(i18n.t("common.openInputMonitoringSettings")) {
+                    permissionMonitor.openInputMonitoringSettings()
+                }
+            }
         }
         .formStyle(.grouped)
     }
@@ -281,7 +387,7 @@ struct SettingsView: View {
                 .foregroundStyle(.tint)
             Text("DS4Mate")
                 .font(.title)
-            Text("v1.0.0")
+            Text(appVersion)
                 .font(.caption)
                 .foregroundStyle(.secondary)
             Text(i18n.t("settings.about.tagline"))
